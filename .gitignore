@@ -1,0 +1,13 @@
+__pycache__/
+*.sqlite
+cache/
+.DS_Store
+*.out
+*.mex*
+*.db
+*.a
+*.o
+*.asv
+*.*~
+*_local.m
+
