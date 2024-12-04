@@ -1,20 +1,39 @@
 classdef ITC4001 < handle
 % see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
 % see page 41 in programmers manual for sweeps
+%
+% With setpoint at 330 and modulation depth 2 (%?) it goes from 270 to 390,
+% roughly betwen 330 * (1-0.2) to 330 * (1+0.2)
+% same but with mod depth 5% it goes from 180 to 479 which is kinda close to
+% 330 * (1 - 0.5) to 330 * (1 + 0.5)
+%
     properties(Dependent = true, SetAccess = private)
-        addr;         % The resource name, aka "visa address"
-        serialNumber; % Serial number of the device
-        id;           % The complete identification string of the device
+        % The resource name, aka "visa address"
+        addr;
+        % Serial number of the device
+        serialNumber;
+        % The complete identification string of the device
+        id;
+        % The state of the keylock
+        Key_lock (1,1) matlab.lang.OnOffSwitchState;
+        % Current temperature reading
+        T_reading (1,1) mustBeNumeric;
+        % Current laser current reading
+        Laser_A_reading (1,1) mustBeNumeric;
+        % Current laser voltage reading
+        Laser_V_reading (1,1) mustBeNumeric;
     end
     properties(Dependent = true)
-        TEC matlab.lang.OnOffSwitchState;
-        T_unit ITC4001TemperatureUnit;
-        T_setpoint;
-        T_reading;
+        % State of the thermoelectric cooler (TEC)
+        TEC (1,1) matlab.lang.OnOffSwitchState;
+        % Unit for temperature readings
+        T_unit (1,1) ITC4001TemperatureUnit;
+        % Setpoint for TEC
+        T_setpoint (1,1) mustBeNumeric;
+        % Laser state
         Laser matlab.lang.OnOffSwitchState;
-        Laser_A_setpoint;
-        Laser_A_reading;
-        Laser_V_reading;
+        % Laser current setpoint
+        Laser_A_setpoint (1,1) mustBePositive;
     end
     properties(GetAccess = protected, SetAccess = immutable)
         dev; % the VISA device
@@ -55,7 +74,7 @@ classdef ITC4001 < handle
                       'Constructor only accepts 0 or 1 arguments.');
             end
         end
-
+%% Read-write props
         function state = get.TEC(o)
             state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP2?')));
         end
@@ -67,20 +86,13 @@ classdef ITC4001 < handle
             unit = ITC4001TemperatureUnit(o.query('UNIT:TEMPerature?'));
         end
         function set.T_unit(o, unit)
-            % TODO
+            o.write(['UNIT:TEMPerature ', char(unit)]);
         end
 
         function T = get.T_setpoint(o)
             T = str2double(o.query('SOUR2:TEMP?'));
         end
         function set.T_setpoint(o, T)
-            % TODO
-        end
-
-        function T = get.T_reading(o)
-            T = str2double(o.query('MEAS:TEMP?')); % 'MEAS:TSEN?'  or should i use 'FETC:T..'          % <----- DOUBLE CHECK THIS ONE!!! NOT SURE!
-        end
-        function set.T_reading(o, T)
             % TODO
         end
 
@@ -94,22 +106,39 @@ classdef ITC4001 < handle
         function A = get.Laser_A_setpoint(o)
             A = str2double(o.query(''));
         end
+
         function set.Laser_A_setpoint(o, A)
             % TODO
+        end
+
+%% Read-only props
+        function state = get.Key_lock(o)
+            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP:PROT:KEYL:TRIP?')));
+        end
+
+        function T = get.T_reading(o)
+            T = str2double(o.query('MEAS:TEMP?'));
         end
 
         function A = get.Laser_A_reading(o)
             A = str2double(o.query(''));
         end
-        function set.Laser_A_reading(o, A)
-            % TODO
-        end
 
         function V = get.Laser_V_reading(o)
             V = str2double(o.query(''));
         end
-        function set.Laser_V_reading(o, V)
-            % TODO
+
+        % props with different names than on device
+        function addr = get.addr(o)
+            addr = o.dev.ResourceName;
+        end
+
+        function serialNumber = get.serialNumber(o)
+            serialNumber = o.dev.SerialNumber;
+        end
+
+        function id = get.id(o)
+            id = o.query('*IDN?');
         end
 
         function disconnect(o)
@@ -121,20 +150,15 @@ classdef ITC4001 < handle
         function delete(o)
             o.disconnect();
         end
-        function addr = get.addr(o)
-            addr = o.dev.ResourceName;
-        end
-        function serialNumber = get.serialNumber(o)
-            serialNumber = o.dev.SerialNumber;
-        end
-        function id = get.id(o)
-            id = o.query('*IDN?');
-        end
     end
 
     methods(Hidden = true)
         function ret = query(o, q)
             ret = strip(writeread(o.dev, q), 'right');
+        end
+        function write(o, q)
+            writeline(o.dev, q);
+            %[a,b] = visastatus(o.dev) % use to check for errors
         end
     end
 
