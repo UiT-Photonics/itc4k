@@ -1,16 +1,17 @@
 classdef ITC4001 < handle
 % see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
+% see page 41 in programmers manual for sweeps
     properties(Dependent = true, SetAccess = private)
         addr;         % The resource name, aka "visa address"
         serialNumber; % Serial number of the device
         id;           % The complete identification string of the device
     end
     properties(Dependent = true)
-        TEC matlab.lang.OnOffSwitchState;  % 
-        Laser matlab.lang.OnOffSwitchState;   %
+        TEC matlab.lang.OnOffSwitchState;
         T_unit ITC4001TemperatureUnit;
         T_setpoint;
         T_reading;
+        Laser matlab.lang.OnOffSwitchState;
         Laser_A_setpoint;
         Laser_A_reading;
         Laser_V_reading;
@@ -55,6 +56,61 @@ classdef ITC4001 < handle
             end
         end
 
+        function state = get.TEC(o)
+            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP2?')));
+        end
+        function set.TEC(o, state)
+            % TODO
+        end
+
+        function unit = get.T_unit(o)
+            unit = ITC4001TemperatureUnit(o.query('UNIT:TEMPerature?'));
+        end
+        function set.T_unit(o, unit)
+            % TODO
+        end
+
+        function T = get.T_setpoint(o)
+            T = str2double(o.query('SOUR2:TEMP?'));
+        end
+        function set.T_setpoint(o, T)
+            % TODO
+        end
+
+        function T = get.T_reading(o)
+            T = str2double(o.query('MEAS:TEMP?')); % 'MEAS:TSEN?'  or should i use 'FETC:T..'          % <----- DOUBLE CHECK THIS ONE!!! NOT SURE!
+        end
+        function set.T_reading(o, T)
+            % TODO
+        end
+
+        function state = get.Laser(o)
+            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP1?')));
+        end
+        function set.Laser(o, state)
+            % TODO
+        end
+
+        function A = get.Laser_A_setpoint(o)
+            A = str2double(o.query(''));
+        end
+        function set.Laser_A_setpoint(o, A)
+            % TODO
+        end
+
+        function A = get.Laser_A_reading(o)
+            A = str2double(o.query(''));
+        end
+        function set.Laser_A_reading(o, A)
+            % TODO
+        end
+
+        function V = get.Laser_V_reading(o)
+            V = str2double(o.query(''));
+        end
+        function set.Laser_V_reading(o, V)
+            % TODO
+        end
 
         function disconnect(o)
 % Disconnect from the device.
@@ -78,7 +134,7 @@ classdef ITC4001 < handle
 
     methods(Hidden = true)
         function ret = query(o, q)
-            ret = writeread(o.dev, q);
+            ret = strip(writeread(o.dev, q), 'right');
         end
     end
 

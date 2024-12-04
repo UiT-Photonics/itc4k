@@ -42,5 +42,5 @@ See `help ITC4001`.
 I want to emphasize *simple class*, you really can't do more than set the
 value/range for the TEC and LD and turn them on/off. It shold be fairly easy to
 extend tho. All the controlling logic is in the itc4001-class, the gui is just a
-static function that creates an object a provides a uifigure-based user
+static function that creates an object and provides a uifigure-based user
 interface to it.

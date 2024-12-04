@@ -1,7 +1,7 @@
-classdef ITC4001TemperatureUnit < string
+classdef ITC4001TemperatureUnit
     enumeration
-        Kelvin  ("K")
-        Celsius ("C")
-        Farenheit ("F")
+        Kelvin
+        Celsius
+        Farenheit
     end
 end
