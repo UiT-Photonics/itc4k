@@ -163,6 +163,9 @@ classdef ITC4001 < handle
     end
 
     methods(Static = true)
+        % this one's in a separate file
+        uip = gui();
+
         function devs = list()
 % devs = ITC4001.list() returns an array with structs identifying all connected
 % (and turned on) ITC4001s. One of these can then be passed on to the
