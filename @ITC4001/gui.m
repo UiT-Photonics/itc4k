@@ -46,11 +46,19 @@ function uip = gui(varargin)
                     'ButtonPushedFcn', @(~,~) connect_dev()), row, 2);
     
     row = row + 1;
-    gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
+    g.Key_lock = gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
     row = row + 1;
-    gl_pair(gl, row, 'TEC', @uiswitch, 'slider', 'Orientation', 'horiz');
+    % temperature section
+    g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
+                    'Orientation', 'horiz');
     row = row + 1;
-    gl_pair(gl, row, 'Temperature', @uilabel, 'Text', 'N/A');
+    g.T_setpoint = gl_pair(gl, row, 'Temperature', @uilabel, 'Text', 'N/A');
+    row = row + 1;
+    g.T_reading = gl_pair(gl, row, 'Temperature', @uilabel, 'Text', 'N/A');
+    row = row + 1;
+    g.T_unit = gl_pair(gl, row, 'T unit', @dropdown, ...
+                       'Items', enumeration('ITC4001TemperatureUnit'));
+    % Laser section
 
 %        T_reading (1,1) mustBeNumeric;
         % Current laser current reading
@@ -79,10 +87,13 @@ function uip = gui(varargin)
         % - values should not be changed if the control has the focus
         g.Key_lock_lamp.Color = clr;
         g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
-        g.T_setpoint.Value = s.dev.T_setpoint;
-        g.T_reading.Text = sprintf('%g %s', s.dev.T_reading, s.dev.T_unit);
-        g.Laser_A_reading.Value = s.dev.Laser_A_reading;
-        g.Laser_V_reading.Value = s.dev.Laser_V_reading;
+        Tsp = s.dev.T_setpoint;
+        g.T_setpoint.Value = Tsp;
+        % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
+        g.T_reading.Text = sprintf('%g', s.dev.T_reading);   % <- THIS MIGHT NOT WORK IF IT'S A STRING AND NOT A CHAR
+
+        g.LD_A_reading.Value = s.dev.LD_A_reading;
+        g.LD_V_reading.Value = s.dev.LD_V_reading;
     end
 
     function update_dd_devs()

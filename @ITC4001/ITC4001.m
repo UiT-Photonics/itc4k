@@ -7,6 +7,8 @@ classdef ITC4001 < handle
 % same but with mod depth 5% it goes from 180 to 479 which is kinda close to
 % 330 * (1 - 0.5) to 330 * (1 + 0.5)
 %
+
+    %% read-only properties of the physical device
     properties(Dependent = true, SetAccess = private)
         % The resource name, aka "visa address"
         addr;
@@ -23,6 +25,7 @@ classdef ITC4001 < handle
         % Current laser voltage reading
         Laser_V_reading (1,1) mustBeNumeric;
     end
+    %% read-write properties of the physical device
     properties(Dependent = true)
         % State of the thermoelectric cooler (TEC)
         TEC (1,1) matlab.lang.OnOffSwitchState;
@@ -31,13 +34,30 @@ classdef ITC4001 < handle
         % Setpoint for TEC
         T_setpoint (1,1) mustBeNumeric;
         % Laser state
-        Laser matlab.lang.OnOffSwitchState;
+        LD matlab.lang.OnOffSwitchState;
         % Laser current setpoint
-        Laser_A_setpoint (1,1) mustBePositive;
+        LD_A_setpoint (1,1) mustBePositive;
     end
+    properties(SetAccess = immutable)
+        bounds;
+    end
+    %% VISA props
     properties(GetAccess = protected, SetAccess = immutable)
         dev; % the VISA device
     end
+    %% SCPI path/props/commands
+    properties(Constant = true, Access = protected)
+        pTEC = 'OUTP2';
+        pTunit = 'UNIT:TEMPerature';
+        pTsp = 'SOUR2:TEMP';
+        pLD = 'OUTP1';
+        pLDAsp = ''; % TODO
+        pKeyLock = 'OUTP:PROT:KEYL:TRIP';
+        pTread = 'MEAS:TEMP';
+        % TODO add the rest
+        pID = '*IDN';
+    end
+    %% full public implementation
     methods
         function o = ITC4001(varargin)
 % o = ITC4001(); creates an instances of the first ITC4001 that's found. Throws
@@ -73,51 +93,52 @@ classdef ITC4001 < handle
                 error('ITC4001:constructor:nargin', ...
                       'Constructor only accepts 0 or 1 arguments.');
             end
+            o.bounds.LD_A_setpoint = o.query_numeric_bounds(o.pLDAsp);
+            o.bounds.T_setpoint = o.query_numeric_bounds(o.pTsp);
         end
 %% Read-write props
         function state = get.TEC(o)
-            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP2?')));
+            state = matlab.lang.OnOffSwitchState(str2double(o.query(o.pTEC)));
         end
         function set.TEC(o, state)
-            % TODO
+            o.write(o.pTEC, state);
         end
 
         function unit = get.T_unit(o)
-            unit = ITC4001TemperatureUnit(o.query('UNIT:TEMPerature?'));
+            unit = ITC4001TemperatureUnit(o.query(o.pTunit));
         end
         function set.T_unit(o, unit)
-            o.write(['UNIT:TEMPerature ', char(unit)]);
+            o.write(o.pTunit, unit);
         end
 
         function T = get.T_setpoint(o)
-            T = str2double(o.query('SOUR2:TEMP?'));
+            T = str2double(o.query(o.pTsp));
         end
         function set.T_setpoint(o, T)
-            % TODO
+            o.write(o.pTsp, T)
         end
 
-        function state = get.Laser(o)
-            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP1?')));
+        function state = get.LD(o)
+            state = matlab.lang.OnOffSwitchState(str2double(o.query(o.pLD)));
         end
-        function set.Laser(o, state)
-            % TODO
+        function set.LD(o, state)
+            o.write(o.pLD, state);
         end
 
-        function A = get.Laser_A_setpoint(o)
+        function A = get.LD_A_setpoint(o)
             A = str2double(o.query(''));
         end
-
-        function set.Laser_A_setpoint(o, A)
+        function set.LD_A_setpoint(o, A)
             % TODO
         end
 
 %% Read-only props
         function state = get.Key_lock(o)
-            state = matlab.lang.OnOffSwitchState(str2double(o.query('OUTP:PROT:KEYL:TRIP?')));
+            state = matlab.lang.OnOffSwitchState(str2double(o.query(o.pKeyLock)));
         end
 
         function T = get.T_reading(o)
-            T = str2double(o.query('MEAS:TEMP?'));
+            T = str2double(o.query(o.pTread));
         end
 
         function A = get.Laser_A_reading(o)
@@ -138,7 +159,7 @@ classdef ITC4001 < handle
         end
 
         function id = get.id(o)
-            id = o.query('*IDN?');
+            id = o.query(o.pID);
         end
 
         function disconnect(o)
@@ -153,12 +174,26 @@ classdef ITC4001 < handle
     end
 
     methods(Hidden = true)
-        function ret = query(o, q)
-            ret = strip(writeread(o.dev, q), 'right');
+        function ret = query(o, prop, varargin)
+            ret = strip(writeread(o.dev, [prop, '?', varargin{:}]), 'right');
         end
-        function write(o, q)
-            writeline(o.dev, q);
+        function write(o, prop, v)
+            if islogical(v)
+                tf = '01';
+                v = tf(v+1);
+            elseif isnumeric(v)
+                v = sprintf('%f', v);
+            elseif ~ischar(v)
+                v = char(v);
+            end
+            writeline(o.dev, [prop, ' ', v]);
             %[a,b] = visastatus(o.dev) % use to check for errors
+        end
+        function bounds = query_numeric_bounds(o, prop)
+            bounds = struct();
+            bounds.min = str2double(o.query(prop, ' MIN'));
+            bounds.max = str2double(o.query(prop, ' MAX'));
+            bounds.def = str2double(o.query(prop, ' DEF'));
         end
     end
 
