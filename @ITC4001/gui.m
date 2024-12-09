@@ -35,6 +35,7 @@ function uip = gui(varargin)
     row = 0;
     gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {100, '1x'}, ...
                       'RowHeight', 'fit');
+    % device selection section
     row = row + 1;
     g.dd_devs = uidropdown(gl);
     gl_pos(g.dd_devs, row, [1 2]);
@@ -44,27 +45,46 @@ function uip = gui(varargin)
                     'ButtonPushedFcn', @(~,~) update_dd_devs()), row, 1);
     gl_pos(uibutton(gl, 'Text', 'Connect', ...
                     'ButtonPushedFcn', @(~,~) connect_dev()), row, 2);
-    
+    % keylock included in device selection
     row = row + 1;
     g.Key_lock = gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
-    row = row + 1;
+
     % temperature section
+    row = row + 1;
+    gl_pos(uilabel('Text', 'TEC Control', 'FontWeight', 'bold'), row, [1 2]);
+    row = row + 1;
     g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
                     'Orientation', 'horiz');
     row = row + 1;
-    g.T_setpoint = gl_pair(gl, row, 'Temperature', @uilabel, 'Text', 'N/A');
+    g.T_setpoint = gl_pair(gl, row, 'T setpoint', @uieditfield, ...
+                           'style', 'numeric');
     row = row + 1;
-    g.T_reading = gl_pair(gl, row, 'Temperature', @uilabel, 'Text', 'N/A');
+    g.T_reading = gl_pair(gl, row, 'T reading', @uilabel, 'Text', 'N/A');
     row = row + 1;
     g.T_unit = gl_pair(gl, row, 'T unit', @dropdown, ...
                        'Items', enumeration('ITC4001TemperatureUnit'));
-    % Laser section
 
-%        T_reading (1,1) mustBeNumeric;
-        % Current laser current reading
-%        Laser_A_reading (1,1) mustBeNumeric;
-        % Current laser voltage reading
-%        Laser_V_reading (1,1) mustBeNumeric;
+    % Laser section
+    row = row + 1;
+    gl_pos(uilabel('Text', 'Laser Control', 'FontWeight', 'bold'), row, [1 2]);
+    row = row + 1;
+    g.LD_prot = gl_pair(gl, row, 'Protection tripped', @uilamp, ...
+                        'Color', 'green');
+    row = row + 1;
+    g.LD = gl_pair(gl, row, 'LD', @uiswitch, 'slider', ...
+                   'Orientation', 'horiz');
+    row = row + 1;
+    g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uilabel, ...
+                              'style', 'numeric');
+    row = row + 1;
+    g.LD_A_setpoint_limit = gl_pair(gl, row, 'Current limit', @uilabel, ...
+                                    'style', 'numeric');
+    row = row + 1;
+    g.LD_A_reading = gl_pair(gl, row, 'Current reading', @uilabel, ...
+                             'Text', 'N/A');
+    row = row + 1;
+    g.LD_V_reading = gl_pair(gl, row, 'Voltage reading', @uilabel, ...
+                             'Text', 'N/A');
 
     % lastly we update the devs
     update_dd_devs();
@@ -72,28 +92,45 @@ function uip = gui(varargin)
     function connect_dev()
         s.dev = ITC4001(dd_devs.Value);
 
-        % TODO
-        % - set the min and max limits for the numeric fields!
+        % set the min and max limits for the numeric fields
+        set_numfield_lims(g.T_setpoint, s.dev.bounds.T_setpoint.min, ...
+                          s.dev.bounds.T_setpoint.max);
+        set_numfield_lims(g.LD_A_setpoint, s.dev.bounds.LD_A_setpoint.min, ...
+                          s.dev.bounds.LD_A_setpoint.max);
+        set_numfield_lims(g.LD_A_setpoint_limit, ...
+                          s.dev.LD_A_setpoint_limit.min, ...
+                          s.dev.LD_A_setpoint_limit.max);
 
         s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 0.5, ...
                         'StartDelay', 0, 'TimerFcn', @(~,~) update_vals());
     end
+    function set_numfield_lims(f, lmin, lmax)
+        f.Limits = [lmin lmax];
+        f.Tooltip = sprintf('%.4f - %.4f', lmin, lmax);
+        f.Placeholder = f.Tooltip;
+    end
 
     function update_vals()
-        if s.dev.KeyLock; clr = 'red';
-        else; clr = 'green';
-        end
+        lamp_clrs = {'green', 'red'};
         % TODO
-        % - values should not be changed if the control has the focus
-        g.Key_lock_lamp.Color = clr;
+        % - values should not be set if the control has the focus
+        g.Key_lock.Color = lamp_clrs{logical(s.dev.Key_lock)+1};
+
+        % temperature stuff
         g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
         Tsp = s.dev.T_setpoint;
         g.T_setpoint.Value = Tsp;
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
-        g.T_reading.Text = sprintf('%g', s.dev.T_reading);   % <- THIS MIGHT NOT WORK IF IT'S A STRING AND NOT A CHAR
-
-        g.LD_A_reading.Value = s.dev.LD_A_reading;
-        g.LD_V_reading.Value = s.dev.LD_V_reading;
+        g.T_reading.Text = sprintf('%g', s.dev.T_reading);
+        
+        % Laser stuff
+        g.LD_prot.Color = lamp_clrs{any(s.dev.LD_protection_tripped.tripped)+1};
+        g.LD.Value = g.LD.Items{s.dev.LD+1};
+        LDAsp = s.dev.LD_A_setpoint;
+        g.LD_A_setpoint.Value = LDAsp;
+        % TODO: g.LD_A_reading.Background = [color_gradient from #00FFFF to #FF0000](LD_A - LDAsp)
+        g.LD_A_reading.Text = sprintf('%g', s.dev.LD_A_reading);
+        g.LD_V_reading.Text = sprintf('%g', s.dev.LD_V_reading);
     end
 
     function update_dd_devs()

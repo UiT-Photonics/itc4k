@@ -1,4 +1,8 @@
 classdef ITC4001 < handle
+% TODO:
+% - power limits for the laser
+% - temperature protection tripped property
+%
 % see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
 % see page 41 in programmers manual for sweeps
 %
@@ -10,33 +14,49 @@ classdef ITC4001 < handle
 
     %% read-only properties of the physical device
     properties(Dependent = true, SetAccess = private)
-        % The resource name, aka "visa address"
+% The resource name, aka "visa address"
         addr;
-        % Serial number of the device
+% Serial number of the device
         serialNumber;
-        % The complete identification string of the device
+% The complete identification string of the device
         id;
-        % The state of the keylock
+% The state of the keylock
         Key_lock (1,1) matlab.lang.OnOffSwitchState;
-        % Current temperature reading
+% Temperature reading
         T_reading (1,1) mustBeNumeric;
-        % Current laser current reading
-        Laser_A_reading (1,1) mustBeNumeric;
-        % Current laser voltage reading
-        Laser_V_reading (1,1) mustBeNumeric;
+% Laser current reading
+        LD_A_reading (1,1) mustBeNumeric;
+% Laser voltage reading
+        LD_V_reading (1,1) mustBeNumeric;
+% LD protection-tripped struct with two fields, name and tripped
+        LD_protection_tripped (1,1) logical;
     end
     %% read-write properties of the physical device
     properties(Dependent = true)
-        % State of the thermoelectric cooler (TEC)
+% State of the thermoelectric cooler (TEC)
         TEC (1,1) matlab.lang.OnOffSwitchState;
-        % Unit for temperature readings
+% Unit for temperature readings
         T_unit (1,1) ITC4001TemperatureUnit;
-        % Setpoint for TEC
+% Setpoint for TEC
         T_setpoint (1,1) mustBeNumeric;
-        % Laser state
+% Laser state
         LD matlab.lang.OnOffSwitchState;
-        % Laser current setpoint
+% Laser current setpoint. Note that there are two (sets of) limits for the LD
+% current: (1) the fixed min/max the device can produce, which is available in
+% the ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
+% current limit which is controlled with the ITC4001.LD_A_setpoint_limit
+% property (usually the highest current your laser can handle). The upper and
+% lower bounds that you can set this limit to can be found in
+% ITC4001.bounds.LD_A_setpoint_limit.
         LD_A_setpoint (1,1) mustBePositive;
+% Upper limit for laser current setpoint. Note that there are two (sets of)
+% limits for the LD current: (1) the fixed min/max the device can produce, which
+% is available in the ITC4001.bounds.LD_A_setpoint property. (2) The
+% configurable maximum current limit which is controlled with this property
+% (usually the highest current your laser can handle). The upper and lower
+% bounds that you can set this limit to can be found in
+% ITC4001.bounds.LD_A_setpoint_limit.
+        LD_A_setpoint_limit (1,1) mustBePositive;
     end
     properties(SetAccess = immutable)
         bounds;
@@ -45,17 +65,32 @@ classdef ITC4001 < handle
     properties(GetAccess = protected, SetAccess = immutable)
         dev; % the VISA device
     end
-    %% SCPI path/props/commands
+    %% SCPI props/commands/path
     properties(Constant = true, Access = protected)
         pTEC = 'OUTP2';
         pTunit = 'UNIT:TEMPerature';
         pTsp = 'SOUR2:TEMP';
         pLD = 'OUTP1';
-        pLDAsp = ''; % TODO
-        pKeyLock = 'OUTP:PROT:KEYL:TRIP';
+        pLDAsp = 'SOUR1:CURR';
+        pLDAspLim = 'SOUR1:CURR:LIM';
+        kLDprot = ["current", "voltage", "external", "internal", ...
+                   "interlock", "over_temperature"]; % "keys key"
+        mLDprot = 'OUTP1:PROT:'; % meta key
+        pLDprot = {[ITC4001.pLDAspLim, ':TRIP'], ...
+                   [ITC4001.mLDprot, 'VOLT:TRIP'], ...
+                   [ITC4001.mLDprot, 'EXT:TRIP'], ...
+                   [ITC4001.mLDprot, 'INT:TRIP'], ...
+                   [ITC4001.mLDprot, 'INTL:TRIP'], ...
+                   [ITC4001.mLDprot, 'OTEM:TRIP']},
+        pKeyLock = [ITC4001.mLDprot, 'KEYL:TRIP'];
         pTread = 'MEAS:TEMP';
         % TODO add the rest
         pID = '*IDN';
+
+        % NOTES FOR POSSIBLE DEVELOPERS
+        % this is, of course, faaaar from all of the SCPI commands. the
+        % structure of the class isn't really well suited for it either, so i
+        % don't plan to add much more features to this class. 
     end
     %% full public implementation
     methods
@@ -94,6 +129,7 @@ classdef ITC4001 < handle
                       'Constructor only accepts 0 or 1 arguments.');
             end
             o.bounds.LD_A_setpoint = o.query_numeric_bounds(o.pLDAsp);
+            o.bounds.LD_A_setpoint_limit = o.query_numeric_bounds(o.pLDAspLim);
             o.bounds.T_setpoint = o.query_numeric_bounds(o.pTsp);
         end
 %% Read-write props
@@ -126,13 +162,28 @@ classdef ITC4001 < handle
         end
 
         function A = get.LD_A_setpoint(o)
-            A = str2double(o.query(''));
+            A = str2double(o.query(o.pLDAsp));
         end
         function set.LD_A_setpoint(o, A)
-            % TODO
+            o.write(o.pLDAsp, A);
+        end
+
+        function A = get.LD_A_setpoint_limit(o)
+            A = str2double(o.query(o.pLDAspLim));
+        end
+        function set.LD_A_setpoint_limit(o, A)
+            o.write(o.pLDAspLim, A);
         end
 
 %% Read-only props
+        function states = get.LD_protection_tripped(o)
+            states = struct('name', o.kLDprot, ...
+                            'tripped', logical(size(o.kLDprot)));
+            for i = 1:numel(states.tripped)
+                states.tripped(i) = str2double(o.query(o.pLDprot{i}));
+            end
+        end
+
         function state = get.Key_lock(o)
             state = matlab.lang.OnOffSwitchState(str2double(o.query(o.pKeyLock)));
         end
@@ -141,11 +192,11 @@ classdef ITC4001 < handle
             T = str2double(o.query(o.pTread));
         end
 
-        function A = get.Laser_A_reading(o)
+        function A = get.LD_A_reading(o)
             A = str2double(o.query(''));
         end
 
-        function V = get.Laser_V_reading(o)
+        function V = get.LD_V_reading(o)
             V = str2double(o.query(''));
         end
 
@@ -193,7 +244,6 @@ classdef ITC4001 < handle
             bounds = struct();
             bounds.min = str2double(o.query(prop, ' MIN'));
             bounds.max = str2double(o.query(prop, ' MAX'));
-            bounds.def = str2double(o.query(prop, ' DEF'));
         end
     end
 
