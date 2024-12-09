@@ -16,25 +16,27 @@ function uip = gui(varargin)
 
     % the state
     s = struct('dev', [], 'timer', []);
-    g = struct('dd_devs', []);
+    g = struct();
 
     if nargin == 0
-        parent = uifigure('Name', 'HITRAN toolbox');
-        uip = uipanel(parent, 'Title', 'ITC4001 Control', 'Units', 'norm', ...
+        % autoresizing doesn't seem to work very well with position = [0 0 1 1]
+        g.uif = uifigure('Name', 'ITC4001 Controller', ...
+                         'AutoResizeChildren', 'off');
+        uip = uipanel(g.uif, 'Title', 'ITC4001 Control', 'Units', 'norm', ...
                       'Position', [0 0 1 1]);
     elseif nargin == 1
-        parent = varargin{1};
-        %uif = ancestor(parent, 'matlab.ui.Figure');
-        uip = uipanel(parent, 'Title', 'ITC4001 Control');
+        uip = uipanel(varargin{1}, 'Title', 'ITC4001 Control');
+        g.uif = ancestor(varargin{1}, 'matlab.ui.Figure');
     else
         error('ITC4001:gui:nargin', ...
               'ITC4001.gui only accepts 0 or 1 arguments.');
     end
 
-    n_rows = 5;
+    n_rows = 15;
     row = 0;
-    gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {100, '1x'}, ...
-                      'RowHeight', 'fit');
+    gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {120, '1x'}, ...
+                      'RowHeight', repmat({'fit'}, 1, n_rows), ...
+                      'Scrollable', 'on');
     % device selection section
     row = row + 1;
     g.dd_devs = uidropdown(gl);
@@ -43,42 +45,44 @@ function uip = gui(varargin)
     row = row + 1;
     gl_pos(uibutton(gl, 'Text', 'Refresh devices', ...
                     'ButtonPushedFcn', @(~,~) update_dd_devs()), row, 1);
-    gl_pos(uibutton(gl, 'Text', 'Connect', ...
-                    'ButtonPushedFcn', @(~,~) connect_dev()), row, 2);
+    gl_pos(uibutton(gl, 'state', 'Text', 'Connect', ...
+                    'ValueChangedFcn', @(~,e) toggle_conn(e.Value)), row, 2);
     % keylock included in device selection
     row = row + 1;
     g.Key_lock = gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
 
     % temperature section
     row = row + 1;
-    gl_pos(uilabel('Text', 'TEC Control', 'FontWeight', 'bold'), row, [1 2]);
+    gl_pos(uilabel(gl, 'Text', 'TEC Control', 'FontWeight', 'bold', ...
+                   'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
     g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
-                    'Orientation', 'horiz');
+                    'Orientation', 'horizontal');
     row = row + 1;
-    g.T_setpoint = gl_pair(gl, row, 'T setpoint', @uieditfield, ...
-                           'style', 'numeric');
+    g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
+                           'numeric');
     row = row + 1;
-    g.T_reading = gl_pair(gl, row, 'T reading', @uilabel, 'Text', 'N/A');
+    g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
+                          'Text', 'N/A');
     row = row + 1;
-    g.T_unit = gl_pair(gl, row, 'T unit', @dropdown, ...
-                       'Items', enumeration('ITC4001TemperatureUnit'));
+    g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, ...
+                       'Items', string(enumeration('ITC4001TemperatureUnit')));
 
     % Laser section
     row = row + 1;
-    gl_pos(uilabel('Text', 'Laser Control', 'FontWeight', 'bold'), row, [1 2]);
+    gl_pos(uilabel(gl, 'Text', 'Laser Control', 'FontWeight', 'bold', ...
+                   'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
     g.LD_prot = gl_pair(gl, row, 'Protection tripped', @uilamp, ...
-                        'Color', 'green');
+                        'Color', 'red');
     row = row + 1;
     g.LD = gl_pair(gl, row, 'LD', @uiswitch, 'slider', ...
-                   'Orientation', 'horiz');
+                   'Orientation', 'horizontal');
     row = row + 1;
-    g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uilabel, ...
-                              'style', 'numeric');
+    g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uieditfield, ...
+                              'numeric');
     row = row + 1;
-    g.LD_A_setpoint_limit = gl_pair(gl, row, 'Current limit', @uilabel, ...
-                                    'style', 'numeric');
+    g.LD_A_limit = gl_pair(gl, row, 'Current limit', @uieditfield, 'numeric');
     row = row + 1;
     g.LD_A_reading = gl_pair(gl, row, 'Current reading', @uilabel, ...
                              'Text', 'N/A');
@@ -86,28 +90,55 @@ function uip = gui(varargin)
     g.LD_V_reading = gl_pair(gl, row, 'Voltage reading', @uilabel, ...
                              'Text', 'N/A');
 
-    % lastly we update the devs
+    % lastly we update the devs and adjust the window if we created it
+    enable_fields('off');
     update_dd_devs();
+    if nargin == 0
+        g.uif.Units = 'pixels';
+        g.uif.Position(3:4) = [290, 500];
+    end
 
+%% supporting functions
+    function toggle_conn(connect)
+        g.uif.Pointer = 'watch';
+        drawnow();
+        if connect == 1; connect_dev();
+        else; disconnect_dev();
+        end
+        g.uif.Pointer = 'arrow';
+    end
     function connect_dev()
-        s.dev = ITC4001(dd_devs.Value);
-
+        s.dev = ITC4001(g.dd_devs.Value);
         % set the min and max limits for the numeric fields
         set_numfield_lims(g.T_setpoint, s.dev.bounds.T_setpoint.min, ...
                           s.dev.bounds.T_setpoint.max);
         set_numfield_lims(g.LD_A_setpoint, s.dev.bounds.LD_A_setpoint.min, ...
                           s.dev.bounds.LD_A_setpoint.max);
-        set_numfield_lims(g.LD_A_setpoint_limit, ...
-                          s.dev.LD_A_setpoint_limit.min, ...
-                          s.dev.LD_A_setpoint_limit.max);
-
+        set_numfield_lims(g.LD_A_limit, s.dev.bounds.LD_A_limit.min, ...
+                          s.dev.bounds.LD_A_limit.max);
         s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 0.5, ...
                         'StartDelay', 0, 'TimerFcn', @(~,~) update_vals());
+        s.timer.start();
+        enable_fields('on');
+    end
+    function disconnect_dev()
+        enable_fields('off');
+        if ~isempty(s.dev); s.dev.disconnect(); end
+        if s.timer.Running; s.timer.stop(); end
     end
     function set_numfield_lims(f, lmin, lmax)
         f.Limits = [lmin lmax];
         f.Tooltip = sprintf('%.4f - %.4f', lmin, lmax);
         f.Placeholder = f.Tooltip;
+    end
+    function enable_fields(tf)
+        blacklist = {'uif', 'dd_devs'};
+        for nm_cell = reshape(fieldnames(g), 1, [])
+            if any(strcmp(nm_cell, blacklist)); continue;
+            else; nm = nm_cell{1};
+            end
+            if isprop(g.(nm), 'Enable'); g.(nm).Enable = tf; end
+        end
     end
 
     function update_vals()
@@ -121,6 +152,7 @@ function uip = gui(varargin)
         Tsp = s.dev.T_setpoint;
         g.T_setpoint.Value = Tsp;
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
+%        g.T_unit
         g.T_reading.Text = sprintf('%g', s.dev.T_reading);
         
         % Laser stuff
@@ -134,12 +166,14 @@ function uip = gui(varargin)
     end
 
     function update_dd_devs()
+        g.uif.Pointer = 'watch';
         devs = ITC4001.list();
         strs = [devs.ResourceName];
         has_alias = ~([devs.Alias] == "");
         if any(has_alias); strs(has_alias) = [devs(has_alias).Alias]; end
         g.dd_devs.Items = strs;
         g.dd_devs.ItemsData = devs;
+        g.uif.Pointer = 'arrow';
     end
 
     function ctrl = gl_pair(gl, r, s, fn, varargin)

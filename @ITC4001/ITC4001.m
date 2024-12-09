@@ -41,22 +41,26 @@ classdef ITC4001 < handle
         T_setpoint (1,1) mustBeNumeric;
 % Laser state
         LD matlab.lang.OnOffSwitchState;
-% Laser current setpoint. Note that there are two (sets of) limits for the LD
-% current: (1) the fixed min/max the device can produce, which is available in
-% the ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
-% current limit which is controlled with the ITC4001.LD_A_setpoint_limit
-% property (usually the highest current your laser can handle). The upper and
-% lower bounds that you can set this limit to can be found in
-% ITC4001.bounds.LD_A_setpoint_limit.
+% Laser current setpoint. Note that there are two (sets of) limits that control
+% the current for the laser: (1) the fixed limits for the setpoint. These are
+% capped at both ends by the ITC4001 device itself and is available in the
+% ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
+% current limit which is controlled with the ITC4001.LD_A_limit property and is
+% usually set to (slightly below) the highest current your laser can handle. The
+% upper and lower bounds that you can set this limit to can be found in
+% ITC4001.bounds.LD_A_limit.
+% The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
         LD_A_setpoint (1,1) mustBePositive;
 % Upper limit for laser current setpoint. Note that there are two (sets of)
-% limits for the LD current: (1) the fixed min/max the device can produce, which
-% is available in the ITC4001.bounds.LD_A_setpoint property. (2) The
-% configurable maximum current limit which is controlled with this property
-% (usually the highest current your laser can handle). The upper and lower
-% bounds that you can set this limit to can be found in
-% ITC4001.bounds.LD_A_setpoint_limit.
-        LD_A_setpoint_limit (1,1) mustBePositive;
+% limits that control the current for the laser: (1) the fixed limits for the
+% setpoint. These are capped at both ends by the ITC4001 device itself and is
+% available in the ITC4001.bounds.LD_A_setpoint property. (2) The configurable
+% maximum current limit which is controlled with this property and is usually
+% set to (slightly below) the highest current your laser can handle. The upper
+% and lower bounds that you can set this limit to can be found in
+% ITC4001.bounds.LD_A_limit.
+% The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
+        LD_A_limit (1,1) mustBePositive;
     end
     properties(SetAccess = immutable)
         bounds;
@@ -129,7 +133,7 @@ classdef ITC4001 < handle
                       'Constructor only accepts 0 or 1 arguments.');
             end
             o.bounds.LD_A_setpoint = o.query_numeric_bounds(o.pLDAsp);
-            o.bounds.LD_A_setpoint_limit = o.query_numeric_bounds(o.pLDAspLim);
+            o.bounds.LD_A_limit = o.query_numeric_bounds(o.pLDAspLim);
             o.bounds.T_setpoint = o.query_numeric_bounds(o.pTsp);
         end
 %% Read-write props
@@ -168,10 +172,10 @@ classdef ITC4001 < handle
             o.write(o.pLDAsp, A);
         end
 
-        function A = get.LD_A_setpoint_limit(o)
+        function A = get.LD_A_limit(o)
             A = str2double(o.query(o.pLDAspLim));
         end
-        function set.LD_A_setpoint_limit(o, A)
+        function set.LD_A_limit(o, A)
             o.write(o.pLDAspLim, A);
         end
 
@@ -218,7 +222,7 @@ classdef ITC4001 < handle
             delete(o.dev);
         end
 
-        %% implicit methods
+        % handle subclass destructor
         function delete(o)
             o.disconnect();
         end
@@ -226,7 +230,10 @@ classdef ITC4001 < handle
 
     methods(Hidden = true)
         function ret = query(o, prop, varargin)
+            tic();
+            fprintf('%s ', prop); % TODO find out what is taking so long!!
             ret = strip(writeread(o.dev, [prop, '?', varargin{:}]), 'right');
+            toc()
         end
         function write(o, prop, v)
             if islogical(v)
