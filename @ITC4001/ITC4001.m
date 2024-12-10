@@ -1,6 +1,5 @@
 classdef ITC4001 < handle
 % TODO:
-% - power limits for the laser
 % - temperature protection tripped property
 %
 % see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
@@ -11,8 +10,20 @@ classdef ITC4001 < handle
 % same but with mod depth 5% it goes from 180 to 479 which is kinda close to
 % 330 * (1 - 0.5) to 330 * (1 + 0.5)
 %
+% Notes
+% The properties of this class only abstracts a small fraction of all the SCPI
+% commands/properties. This is kind of by design, it's intended to be an easy
+% abstraction for the most basic use case; starting turning on the TEC, waiting
+% for the temp to stabilize, and turn on the laser. If every possible property
+% of the ITC4001 was a dependent property here it wouldn't be much easier than
+% just looking up the SCPI commands and doing it "manually". With that said, the
+% object has three different hidden methods, o.query(property, varargin),
+% o.write(prop, value), and o.query_numeric_bounds(prop). You can check those
+% out if you want to subclass or just check some extra props from the command
+% line.
+%
 
-    %% read-only properties of the physical device
+    %% read-only properties of the physical device(-ish)
     properties(Dependent = true, SetAccess = private)
 % The resource name, aka "visa address"
         addr;
@@ -24,6 +35,10 @@ classdef ITC4001 < handle
         Key_lock (1,1) matlab.lang.OnOffSwitchState;
 % Temperature reading
         T_reading (1,1) mustBeNumeric;
+% TEC current reading
+        TEC_A_reading (1,1) mustBeNumeric;
+% TEC voltage reading
+        TEC_V_reading (1,1) mustBeNumeric;
 % Laser current reading
         LD_A_reading (1,1) mustBeNumeric;
 % Laser voltage reading
@@ -74,9 +89,14 @@ classdef ITC4001 < handle
         pTEC = 'OUTP2';
         pTunit = 'UNIT:TEMPerature';
         pTsp = 'SOUR2:TEMP';
+        pTECAread = 'MEAS:CURR3';
+        pTECVread = 'MEAS:VOLT3';
+        pTread = 'MEAS:TEMP';
         pLD = 'OUTP1';
         pLDAsp = 'SOUR1:CURR';
         pLDAspLim = 'SOUR1:CURR:LIM';
+        pLDAread = 'MEAS:CURR1';
+        pLDVread = 'MEAS:VOLT1';
         kLDprot = ["current", "voltage", "external", "internal", ...
                    "interlock", "over_temperature"]; % "keys key"
         mLDprot = 'OUTP1:PROT:'; % meta key
@@ -87,14 +107,8 @@ classdef ITC4001 < handle
                    [ITC4001.mLDprot, 'INTL:TRIP'], ...
                    [ITC4001.mLDprot, 'OTEM:TRIP']},
         pKeyLock = [ITC4001.mLDprot, 'KEYL:TRIP'];
-        pTread = 'MEAS:TEMP';
         % TODO add the rest
         pID = '*IDN';
-
-        % NOTES FOR POSSIBLE DEVELOPERS
-        % this is, of course, faaaar from all of the SCPI commands. the
-        % structure of the class isn't really well suited for it either, so i
-        % don't plan to add much more features to this class. 
     end
     %% full public implementation
     methods
@@ -125,8 +139,8 @@ classdef ITC4001 < handle
                 elseif isstring(varargin{1}) || ischar(varargin{1})
                     o.dev = visadev(varargin{1});
                 else
-                error('ITC4001:constructor:arg_class', ...
-                      'Constructor only accepts a struct or a string as argument.');
+                    error('ITC4001:constructor:arg_class', ...
+                          'Constructor only accepts a struct or a string as argument.');
                 end
             else
                 error('ITC4001:constructor:nargin', ...
@@ -196,12 +210,20 @@ classdef ITC4001 < handle
             T = str2double(o.query(o.pTread));
         end
 
+        function A = get.TEC_A_reading(o)
+            A = str2double(o.query(o.pTECAread));
+        end
+
+        function V = get.TEC_V_reading(o)
+            V = str2double(o.query(o.pTECVread));
+        end
+
         function A = get.LD_A_reading(o)
-            A = str2double(o.query(''));
+            A = str2double(o.query(o.pLDAread));
         end
 
         function V = get.LD_V_reading(o)
-            V = str2double(o.query(''));
+            V = str2double(o.query(o.pLDVread));
         end
 
         % props with different names than on device
@@ -230,10 +252,7 @@ classdef ITC4001 < handle
 
     methods(Hidden = true)
         function ret = query(o, prop, varargin)
-            tic();
-            fprintf('%s ', prop); % TODO find out what is taking so long!!
             ret = strip(writeread(o.dev, [prop, '?', varargin{:}]), 'right');
-            toc()
         end
         function write(o, prop, v)
             if islogical(v)
@@ -245,7 +264,7 @@ classdef ITC4001 < handle
                 v = char(v);
             end
             writeline(o.dev, [prop, ' ', v]);
-            %[a,b] = visastatus(o.dev) % use to check for errors
+            %[a,b] = visastatus(o.dev) % use to check for errors at some point
         end
         function bounds = query_numeric_bounds(o, prop)
             bounds = struct();

@@ -22,10 +22,9 @@ function uip = gui(varargin)
         % autoresizing doesn't seem to work very well with position = [0 0 1 1]
         g.uif = uifigure('Name', 'ITC4001 Controller', ...
                          'AutoResizeChildren', 'off');
-        uip = uipanel(g.uif, 'Title', 'ITC4001 Control', 'Units', 'norm', ...
-                      'Position', [0 0 1 1]);
+        uip = uipanel(g.uif, 'Units', 'norm', 'Position', [0 0 1 1]);
     elseif nargin == 1
-        uip = uipanel(varargin{1}, 'Title', 'ITC4001 Control');
+        uip = uipanel(varargin{1}, 'Title', 'ITC4001 Controller');
         g.uif = ancestor(varargin{1}, 'matlab.ui.Figure');
     else
         error('ITC4001:gui:nargin', ...
@@ -46,7 +45,7 @@ function uip = gui(varargin)
     gl_pos(uibutton(gl, 'Text', 'Refresh devices', ...
                     'ButtonPushedFcn', @(~,~) update_dd_devs()), row, 1);
     gl_pos(uibutton(gl, 'state', 'Text', 'Connect', ...
-                    'ValueChangedFcn', @(~,e) toggle_conn(e.Value)), row, 2);
+                    'ValueChangedFcn', @toggle_conn), row, 2);
     % keylock included in device selection
     row = row + 1;
     g.Key_lock = gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
@@ -60,7 +59,7 @@ function uip = gui(varargin)
                     'Orientation', 'horizontal');
     row = row + 1;
     g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.5f °C');
+                           'numeric', 'ValueDisplayFormat', '%.4f °C');
     row = row + 1;
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
                           'Text', 'N/A');
@@ -80,10 +79,10 @@ function uip = gui(varargin)
                    'Orientation', 'horizontal');
     row = row + 1;
     g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uieditfield, ...
-                              'numeric', 'ValueDisplayFormat', '%.5f A');
+                              'numeric', 'ValueDisplayFormat', '%.4f A');
     row = row + 1;
     g.LD_A_limit = gl_pair(gl, row, 'Current limit', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.5f A');
+                           'numeric', 'ValueDisplayFormat', '%.4f A');
     row = row + 1;
     g.LD_A_reading = gl_pair(gl, row, 'Current reading', @uilabel, ...
                              'Text', 'N/A');
@@ -100,16 +99,55 @@ function uip = gui(varargin)
     end
 
 %% supporting functions
-    function toggle_conn(connect)
+    function toggle_conn(btn, dat)
         g.uif.Pointer = 'watch';
         drawnow();
-        if connect == 1; connect_dev();
-        else; disconnect_dev();
+        if dat.Value == 1; btn.Value = connect_dev();
+        else; btn.Value = ~disconnect_dev();
+        end
+        if btn.Value == 1; btn.Text = 'Disconnect';
+        else; btn.Text = 'Connect';
         end
         g.uif.Pointer = 'arrow';
     end
-    function connect_dev()
-        s.dev = ITC4001(g.dd_devs.Value);
+    function v = connect_dev()
+        v = false;
+        try
+            s.dev = ITC4001(g.dd_devs.Value);
+        catch e
+            if strcmp(e.identifier, ...
+                      'instrument:interface:visa:multipleIdenticalResources')
+                sel = uiconfirm(g.uif, ...
+                                'This device is already connected and does not support multiple connections. Do you want me to murder the other connection so you can try again?', ...
+                                'Connection Failed!', ...
+                                'Options', {'Yes', 'No'}, ...
+                                'DefaultOption', 1, ...
+                                "Icon", 'error');
+                if strcmp(sel, 'Yes')
+                    % visadevfind is from R2024a...
+                    if exist('visadevfind', 'file') == 2; finder = @visadevfind;
+                    else; finder = @instrfind; %#ok<INSTRF>
+                    end
+                    g.dd_devs.Value
+                    v = finder('ResourceName', g.dd_devs.Value.ResourceName);
+                    if ~isempty(v)
+                        delete(v);
+                        uialert(g.uif, ...
+                                'Murder went well. Try connecting again!', ...
+                                'Kill confirmed.', ...
+                                'Icon', 'success');
+                    else
+                        uialert(g.uif, ...
+                                'Could not find the other connection, you will likely have to restart matlab/the device/the computer.', ...
+                                'Kill failed', ...
+                                'Icon', 'error');
+                    end
+                end
+            else
+                uialert(g.uif, e.message, 'Connection Failed!');
+            end
+            return;
+        end
         % set the min and max limits for the numeric fields
         set_numfield_lims(g.T_setpoint, s.dev.bounds.T_setpoint.min, ...
                           s.dev.bounds.T_setpoint.max);
@@ -120,9 +158,12 @@ function uip = gui(varargin)
         s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                         'StartDelay', 0, 'TimerFcn', @(~,~) update_vals());
         s.timer.start();
+        %update_vals();
         enable_fields('on');
+        v = true;
     end
-    function disconnect_dev()
+    function v = disconnect_dev()
+        v = true;
         enable_fields('off');
         if ~isempty(s.dev); s.dev.disconnect(); end
         if s.timer.Running; s.timer.stop(); end
@@ -151,16 +192,16 @@ function uip = gui(varargin)
         % temperature stuff
         g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
         Tsp = s.dev.T_setpoint;
-        T_unit = s.dev.T_unit;
-        if strncmpi(T_unit, 'K', 1); T_fmt = '%.5f K';
-        else; T_fmt = ['%.5f °', T_unit(1)];
+        T_unit = char(s.dev.T_unit);
+        if T_unit(1) == 'K'; T_fmt = '%.4f K';
+        else; T_fmt = ['%.4f °', T_unit(1)];
         end
         set_if_neq(g.T_setpoint, Tsp);
         if ~strcmpi(T_unit, g.T_unit.Value)
             g.T_setpoint.ValueDisplayFormat = T_fmt;
         end
+        if g.T_unit.Value(1) ~= T_unit(1); g.T_unit.Value = T_unit; end
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
-        set_if_neq(g.T_unit, T_unit);
         g.T_reading.Text = sprintf(T_fmt, s.dev.T_reading);
         
         % Laser stuff
@@ -178,14 +219,12 @@ function uip = gui(varargin)
         %if g.LD_A_setpoint
         set_if_neq(g.LD_A_setpoint, LDAsp);
         % TODO: g.LD_A_reading.Background = [color_gradient from #00FFFF to #FF0000](LD_A - LDAsp)
-        g.LD_A_reading.Text = sprintf('%.5f A', s.dev.LD_A_reading);
-        g.LD_V_reading.Text = sprintf('%.5f V', s.dev.LD_V_reading);
+        g.LD_A_reading.Text = sprintf('%.4f A', s.dev.LD_A_reading);
+        g.LD_V_reading.Text = sprintf('%.4f V', s.dev.LD_V_reading);
     end
     function set_if_neq(c,v)
-        if c.
-        if c.Value ~= v; c.Value = v; end
+        if any(c.Value ~= v); c.Value = v; end
     end
-
 
     function update_dd_devs()
         g.uif.Pointer = 'watch';
