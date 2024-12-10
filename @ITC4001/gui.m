@@ -60,13 +60,13 @@ function uip = gui(varargin)
                     'Orientation', 'horizontal');
     row = row + 1;
     g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
-                           'numeric');
+                           'numeric', 'ValueDisplayFormat', '%.5f °C');
     row = row + 1;
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
                           'Text', 'N/A');
     row = row + 1;
-    g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, ...
-                       'Items', string(enumeration('ITC4001TemperatureUnit')));
+    [~, T_units] = enumeration('ITC4001TemperatureUnit');
+    g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, 'Items', T_units);
 
     % Laser section
     row = row + 1;
@@ -80,9 +80,10 @@ function uip = gui(varargin)
                    'Orientation', 'horizontal');
     row = row + 1;
     g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uieditfield, ...
-                              'numeric');
+                              'numeric', 'ValueDisplayFormat', '%.5f A');
     row = row + 1;
-    g.LD_A_limit = gl_pair(gl, row, 'Current limit', @uieditfield, 'numeric');
+    g.LD_A_limit = gl_pair(gl, row, 'Current limit', @uieditfield, ...
+                           'numeric', 'ValueDisplayFormat', '%.5f A');
     row = row + 1;
     g.LD_A_reading = gl_pair(gl, row, 'Current reading', @uilabel, ...
                              'Text', 'N/A');
@@ -116,7 +117,7 @@ function uip = gui(varargin)
                           s.dev.bounds.LD_A_setpoint.max);
         set_numfield_lims(g.LD_A_limit, s.dev.bounds.LD_A_limit.min, ...
                           s.dev.bounds.LD_A_limit.max);
-        s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 0.5, ...
+        s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
                         'StartDelay', 0, 'TimerFcn', @(~,~) update_vals());
         s.timer.start();
         enable_fields('on');
@@ -150,20 +151,41 @@ function uip = gui(varargin)
         % temperature stuff
         g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
         Tsp = s.dev.T_setpoint;
-        g.T_setpoint.Value = Tsp;
+        T_unit = s.dev.T_unit;
+        if strncmpi(T_unit, 'K', 1); T_fmt = '%.5f K';
+        else; T_fmt = ['%.5f °', T_unit(1)];
+        end
+        set_if_neq(g.T_setpoint, Tsp);
+        if ~strcmpi(T_unit, g.T_unit.Value)
+            g.T_setpoint.ValueDisplayFormat = T_fmt;
+        end
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
-%        g.T_unit
-        g.T_reading.Text = sprintf('%g', s.dev.T_reading);
+        set_if_neq(g.T_unit, T_unit);
+        g.T_reading.Text = sprintf(T_fmt, s.dev.T_reading);
         
         % Laser stuff
-        g.LD_prot.Color = lamp_clrs{any(s.dev.LD_protection_tripped.tripped)+1};
-        g.LD.Value = g.LD.Items{s.dev.LD+1};
+        LD_tripped = s.dev.LD_protection_tripped.tripped;
+        if any(LD_tripped)
+            g.LD_prot.Color = lamp_clrs{2};
+            g.LD_prot.Tooltip = sprintf('Tripped protection(s): %s', ...
+                                        strjoin(s.dev.LD_protection_tripped.name(LD_tripped), ', '));
+        elseif strcmpi(g.LD_prot.Color, lamp_clrs{2})
+            g.LD_prot.Color = lamp_clrs{1};
+            g.LD_prot.Tooltip = 'No protection tripped';
+        end
+        if g.LD.Value ~= (s.dev.LD+1); g.LD.Value = g.LD.Items{s.dev.LD+1}; end
         LDAsp = s.dev.LD_A_setpoint;
-        g.LD_A_setpoint.Value = LDAsp;
+        %if g.LD_A_setpoint
+        set_if_neq(g.LD_A_setpoint, LDAsp);
         % TODO: g.LD_A_reading.Background = [color_gradient from #00FFFF to #FF0000](LD_A - LDAsp)
-        g.LD_A_reading.Text = sprintf('%g', s.dev.LD_A_reading);
-        g.LD_V_reading.Text = sprintf('%g', s.dev.LD_V_reading);
+        g.LD_A_reading.Text = sprintf('%.5f A', s.dev.LD_A_reading);
+        g.LD_V_reading.Text = sprintf('%.5f V', s.dev.LD_V_reading);
     end
+    function set_if_neq(c,v)
+        if c.
+        if c.Value ~= v; c.Value = v; end
+    end
+
 
     function update_dd_devs()
         g.uif.Pointer = 'watch';

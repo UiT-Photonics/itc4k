@@ -29,7 +29,7 @@ classdef ITC4001 < handle
 % Laser voltage reading
         LD_V_reading (1,1) mustBeNumeric;
 % LD protection-tripped struct with two fields, name and tripped
-        LD_protection_tripped (1,1) logical;
+        LD_protection_tripped (1,1) struct;
     end
     %% read-write properties of the physical device
     properties(Dependent = true)
