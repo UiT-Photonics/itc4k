@@ -31,7 +31,7 @@ function uip = gui(varargin)
               'ITC4001.gui only accepts 0 or 1 arguments.');
     end
 
-    n_rows = 15;
+    n_rows = 22;
     row = 0;
     gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {120, '1x'}, ...
                       'RowHeight', repmat({'fit'}, 1, n_rows), ...
@@ -45,7 +45,12 @@ function uip = gui(varargin)
     gl_pos(uibutton(gl, 'Text', 'Refresh devices', ...
                     'ButtonPushedFcn', @(~,~) update_dd_devs()), row, 1);
     gl_pos(uibutton(gl, 'state', 'Text', 'Connect', ...
-                    'ValueChangedFcn', @toggle_conn), row, 2);
+                    'ValueChangedFcn', @cb_toggle_conn), row, 2);
+    % since the whole ui-family is missing a horizontal ruler we'll just use the
+    % html component for it
+    row = row + 1;
+    gl_pos(uilabel(gl, 'Text', '<hr />', 'Interpreter', 'html', ...
+                   'FontSize', 1), row, [1 2]);
     % keylock included in device selection
     row = row + 1;
     g.Key_lock = gl_pair(gl, row, 'Key Lock', @uilamp, 'Color', 'red');
@@ -55,17 +60,18 @@ function uip = gui(varargin)
     gl_pos(uilabel(gl, 'Text', 'TEC Control', 'FontWeight', 'bold', ...
                    'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
-    g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
-                    'Orientation', 'horizontal');
-    row = row + 1;
     g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
                            'numeric', 'ValueDisplayFormat', '%.4f °C');
     row = row + 1;
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
                           'Text', 'N/A');
     row = row + 1;
-    [~, T_units] = enumeration('ITC4001TemperatureUnit');
+    [~, T_units] = enumeration('ITC4001Enums.TemperatureUnit');
     g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, 'Items', T_units);
+    row = row + 1;
+    g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
+                    'Orientation', 'horizontal', ...
+                    'ValueChangedFcn', @cb_toggle_TEC);
 
     % Laser section
     row = row + 1;
@@ -74,9 +80,6 @@ function uip = gui(varargin)
     row = row + 1;
     g.LD_prot = gl_pair(gl, row, 'Protection tripped', @uilamp, ...
                         'Color', 'red');
-    row = row + 1;
-    g.LD = gl_pair(gl, row, 'LD', @uiswitch, 'slider', ...
-                   'Orientation', 'horizontal');
     row = row + 1;
     g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uieditfield, ...
                               'numeric', 'ValueDisplayFormat', '%.4f A');
@@ -89,6 +92,38 @@ function uip = gui(varargin)
     row = row + 1;
     g.LD_V_reading = gl_pair(gl, row, 'Voltage reading', @uilabel, ...
                              'Text', 'N/A');
+    row = row + 1;
+    g.LD = gl_pair(gl, row, 'LD', @uiswitch, 'slider', ...
+                   'Orientation', 'horizontal', ...
+                   'ValueChangedFcn', @cb_toggle_LD);
+
+    % Laser modulation
+    row = row + 1;
+    gl_pos(uilabel(gl, 'Text', 'Laser Modulation', 'FontWeight', 'bold', ...
+                   'HorizontalAlignment', 'center'), row, [1 2]);
+    row = row + 1;
+    gl_ms = gl_pair(gl, row, 'Source', @uigridlayout, [1 2]);
+    g.LD_AM_src_int = gl_pos(uicheckbox(gl_ms, 'Text', 'Internal', ...
+                                             'Tag', 'internal', ...
+                                             'ValueChangedFcn', @cb_mod_src), ...
+                                  1, 1);
+    g.LD_AM_src_ext = gl_pos(uicheckbox(gl_ms, 'Text', 'External', ...
+                                             'Tag', 'external', ...
+                                             'ValueChangedFcn', @cb_mod_src), ...
+                                  1, 2);
+    row = row + 1;
+    [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
+    g.LD_AM_shape = gl_pair(gl, row, 'Internal mod. shape', ...
+                                 @uidropdown, 'Items', mod_shapes);
+    % left: frequency, depth, on
+    row = row + 1;
+    g.LD_AM_freq = gl_pair(gl, row, 'Internal mod. Frequency', @uieditfield, ...
+                           'numeric', 'ValueDisplayFormat', '%.4f Hz');
+    row = row + 1;
+    g.LD_AM_depth = gl_pair(gl, row, 'Internal mod. Depth', @uieditfield, ...
+                            'numeric', 'ValueDisplayFormat', '%.4f %%');
+
+    % TODO: CONTINUE HERE!!!
 
     % lastly we update the devs and adjust the window if we created it
     enable_fields('off');
@@ -98,8 +133,8 @@ function uip = gui(varargin)
         g.uif.Position(3:4) = [290, 500];
     end
 
-%% supporting functions
-    function toggle_conn(btn, dat)
+    %% "pure" callbacks
+    function cb_toggle_conn(btn, dat)
         g.uif.Pointer = 'watch';
         drawnow();
         if dat.Value == 1; btn.Value = connect_dev();
@@ -110,6 +145,20 @@ function uip = gui(varargin)
         end
         g.uif.Pointer = 'arrow';
     end
+    function cb_toggle_TEC(btn, dat)
+        % TODO
+    end
+
+    function cb_toggle_LD(btn, dat)
+        % TODO: CHECK THAT TEC IS ON AND ASK FIRST!!
+    end
+
+    function cb_mod_src(btn, dat)
+        % TODO
+    end
+
+    %% supporting functions
+    % these are the ones doing the heavy lifting for some of the callbacks
     function v = connect_dev()
         v = false;
         try
@@ -162,17 +211,20 @@ function uip = gui(varargin)
         enable_fields('on');
         v = true;
     end
+
     function v = disconnect_dev()
         v = true;
         enable_fields('off');
         if ~isempty(s.dev); s.dev.disconnect(); end
         if s.timer.Running; s.timer.stop(); end
     end
+
     function set_numfield_lims(f, lmin, lmax)
         f.Limits = [lmin lmax];
         f.Tooltip = sprintf('%.4f - %.4f', lmin, lmax);
         f.Placeholder = f.Tooltip;
     end
+
     function enable_fields(tf)
         blacklist = {'uif', 'dd_devs'};
         for nm_cell = reshape(fieldnames(g), 1, [])
@@ -237,6 +289,7 @@ function uip = gui(varargin)
         g.uif.Pointer = 'arrow';
     end
 
+    %% gui building stuff
     function ctrl = gl_pair(gl, r, s, fn, varargin)
 % helper for grid layout label-control pairs, args are:
 %   gl    - grid layout
@@ -273,7 +326,7 @@ function uip = gui(varargin)
         c2 = fn(igl, varargin{:});
         gl_pos(c2, 1, 3);
     end
-    function gl_pos(e, r, c)
+    function e = gl_pos(e, r, c)
 % Sets the row and column of an elemnt in an gridlayout's layout-property.
 %
 % Arguments:

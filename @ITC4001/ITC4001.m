@@ -1,6 +1,8 @@
 classdef ITC4001 < handle
 % TODO:
 % - temperature protection tripped property
+% - LD_W_*-stuff, like LD_A_* but for power
+% - modulation, so the whole SOUR1:AM:*-shenanigans
 %
 % see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
 % see page 41 in programmers manual for sweeps
@@ -10,7 +12,7 @@ classdef ITC4001 < handle
 % same but with mod depth 5% it goes from 180 to 479 which is kinda close to
 % 330 * (1 - 0.5) to 330 * (1 + 0.5)
 %
-% Notes
+% (Developer-ish) Notes
 % The properties of this class only abstracts a small fraction of all the SCPI
 % commands/properties. This is kind of by design, it's intended to be an easy
 % abstraction for the most basic use case; starting turning on the TEC, waiting
@@ -22,6 +24,12 @@ classdef ITC4001 < handle
 % out if you want to subclass or just check some extra props from the command
 % line.
 %
+% Possible future addons
+% - Make it work for LDC4000-series, shold really just be to add another SCPI
+%   props-section (and adjust the usage accordingly). or maybe an abstract class
+%   that then gets subclassed with or something..
+% - Maybe also TED4000, that one's missing some stuff tho.
+%
 
     %% read-only properties of the physical device(-ish)
     properties(Dependent = true, SetAccess = private)
@@ -31,42 +39,50 @@ classdef ITC4001 < handle
         serialNumber;
 % The complete identification string of the device
         id;
-% The state of the keylock
+% The state of the keylock [OnOffSwitchState]
         Key_lock (1,1) matlab.lang.OnOffSwitchState;
-% Temperature reading
+% Temperature reading [ITC4001.T_unit]
         T_reading (1,1) mustBeNumeric;
-% TEC current reading
+% TEC current reading [A]
         TEC_A_reading (1,1) mustBeNumeric;
-% TEC voltage reading
+% TEC voltage reading [V]
         TEC_V_reading (1,1) mustBeNumeric;
-% Laser current reading
+% Laser current reading [A]
         LD_A_reading (1,1) mustBeNumeric;
-% Laser voltage reading
+% Laser voltage reading [V]
         LD_V_reading (1,1) mustBeNumeric;
-% LD protection-tripped struct with two fields, name and tripped
+% LD protection-tripped struct with two fields, name [string] and tripped
+% [logical]
         LD_protection_tripped (1,1) struct;
     end
     %% read-write properties of the physical device
     properties(Dependent = true)
-% State of the thermoelectric cooler (TEC)
+% Tthermoelectric cooler (TEC) state [OnOffSwitchState]
         TEC (1,1) matlab.lang.OnOffSwitchState;
-% Unit for temperature readings
-        T_unit (1,1) ITC4001TemperatureUnit;
-% Setpoint for TEC
+% Unit for temperature readings [ITC4001Enums.TemperatureUnit]
+        T_unit (1,1) ITC4001Enums.TemperatureUnit;
+% Setpoint for TEC [ITC4001.T_unit]. The limits of this value is available in
+% ITC4001.bounds.T_setpoint.
+%
+% See also
+% ITC4001.bounds
         T_setpoint (1,1) mustBeNumeric;
-% Laser state
-        LD matlab.lang.OnOffSwitchState;
-% Laser current setpoint. Note that there are two (sets of) limits that control
-% the current for the laser: (1) the fixed limits for the setpoint. These are
-% capped at both ends by the ITC4001 device itself and is available in the
-% ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
+% Laser state [OnOffSwitchState]
+        LD (1,1) matlab.lang.OnOffSwitchState;
+% Laser current setpoint [A]. Note that there are two (sets of) limits that 
+% control the current for the laser: (1) the fixed limits for the setpoint.
+% These are capped at both ends by the ITC4001 device itself and is available in
+% the ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
 % current limit which is controlled with the ITC4001.LD_A_limit property and is
 % usually set to (slightly below) the highest current your laser can handle. The
 % upper and lower bounds that you can set this limit to can be found in
 % ITC4001.bounds.LD_A_limit.
 % The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
+%
+% See also
+% ITC4001.bounds
         LD_A_setpoint (1,1) mustBePositive;
-% Upper limit for laser current setpoint. Note that there are two (sets of)
+% Upper limit for laser current setpoint [A]. Note that there are two (sets of)
 % limits that control the current for the laser: (1) the fixed limits for the
 % setpoint. These are capped at both ends by the ITC4001 device itself and is
 % available in the ITC4001.bounds.LD_A_setpoint property. (2) The configurable
@@ -75,12 +91,45 @@ classdef ITC4001 < handle
 % and lower bounds that you can set this limit to can be found in
 % ITC4001.bounds.LD_A_limit.
 % The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
+%
+% See also
+% ITC4001.bounds
         LD_A_limit (1,1) mustBePositive;
+% Laser amplitude modulation state [OnOffSwitchState]
+        LD_AM (1,1) matlab.lang.OnOffSwitchState;
+% Laser amplitude modulation source [ITC4001Enums.ModulationSource]
+        LD_AM_source (1,1) ITC4001Enums.ModulationSource;
+% Internal laser amplitude modulation shape [ITC4001Enums.ModulationShape]
+        LD_AM_shape (1,1) ITC4001Enums.ModulationShape;
+% Internal laser amplitude modulation frequency [Hz]. The limits of this value
+% is available in ITC4001.bounds.LD_AM_frequency.
+%
+% See also
+% ITC4001.bounds
+        LD_AM_frequency (1,1) mustBePositive;
+% Internal laser amplitude modulation depth [%]. TODO: DOCUMENT WHAT THE FUCK
+% KINDA PERCENT THIS IS
+% The limits of this value is available in ITC4001.bounds.LD_AM_depth.
+%
+% See also
+% ITC4001.bounds
+        LD_AM_depth (1,1) mustBePositive;
     end
     properties(SetAccess = immutable)
+% Array of structs with min and max-values for the following properties
+% ITC4001.LD_A_setpoint
+% ITC4001.LD_A_limit
+% ITC4001.T_setpoint
+% ITC4001.LD_AM_frequency
+% ITC4001.LD_AM_depth
+%
+% See also
+% ITC4001.LD_A_setpoint, ITC4001.LD_A_limit, ITC4001.T_setpoint,
+% ITC4001.LD_AM_frequency, ITC4001.LD_AM_depth
         bounds;
     end
     %% VISA props
+    % C/Should be extended with all the right protocol settings
     properties(GetAccess = protected, SetAccess = immutable)
         dev; % the VISA device
     end
@@ -107,7 +156,11 @@ classdef ITC4001 < handle
                    [ITC4001.mLDprot, 'INTL:TRIP'], ...
                    [ITC4001.mLDprot, 'OTEM:TRIP']},
         pKeyLock = [ITC4001.mLDprot, 'KEYL:TRIP'];
-        % TODO add the rest
+        pLDAM = 'SOUR1:AM';
+        pLDAMsrc = [ITC4001.pLDAM, ':SOUR'];
+        pLDAMshape = [ITC4001.pLDAM, ':INT:SHAP'];
+        pLDAMfreq = [ITC4001.pLDAM, ':INT:FREQ'];
+        pLDAMdepth = [ITC4001.pLDAM, ':INT:DEPT'];
         pID = '*IDN';
     end
     %% full public implementation
@@ -149,6 +202,8 @@ classdef ITC4001 < handle
             o.bounds.LD_A_setpoint = o.query_numeric_bounds(o.pLDAsp);
             o.bounds.LD_A_limit = o.query_numeric_bounds(o.pLDAspLim);
             o.bounds.T_setpoint = o.query_numeric_bounds(o.pTsp);
+            o.bounds.LD_AM_frequency = o.query_numeric_bounds(o.pLDAMfreq);
+            o.bounds.LD_AM_depth = o.query_numeric_bounds(o.pLDAMdepth);
         end
 %% Read-write props
         function state = get.TEC(o)
@@ -159,7 +214,7 @@ classdef ITC4001 < handle
         end
 
         function unit = get.T_unit(o)
-            unit = ITC4001TemperatureUnit(o.query(o.pTunit));
+            unit = ITC4001Enums.TemperatureUnit(o.query(o.pTunit));
         end
         function set.T_unit(o, unit)
             o.write(o.pTunit, unit);
@@ -191,6 +246,41 @@ classdef ITC4001 < handle
         end
         function set.LD_A_limit(o, A)
             o.write(o.pLDAspLim, A);
+        end
+
+        function state = get.LD_AM(o)
+            state = matlab.lang.OnOffSwitchState(str2double(o.query(o.pLDAM)));
+        end
+        function set.LD_AM(o, state)
+            o.write(o.pLDAM, state);
+        end
+        
+        function src = get.LD_AM_source(o)
+            src = ITC4001Enums.ModulationSource(o.query(o.pLDAMsrc));
+        end
+        function set.LD_AM_source(o, src)
+            o.write(o.pLDAMsrc, src);
+        end
+        
+        function shape = get.LD_AM_shape(o)
+            shape = ITC4001Enums.ModulationShape(o.query(o.pLDAMshape));
+        end
+        function set.LD_AM_shape(o, shape)
+            o.write(o.pLDAMshape, shape);
+        end
+
+        function freq = get.LD_AM_frequency(o)
+            freq = str2double(o.query(o.pLDAMfreq));
+        end
+        function set.LD_AM_frequency(o, freq)
+            o.write(o.pLDAMfreq, freq);
+        end
+
+        function depth = get.LD_AM_depth(o)
+            depth = str2double(o.query(o.pLDAMdepth));
+        end
+        function set.LD_AM_depth(o, depth)
+            o.write(o.pLDAMdepth, depth);
         end
 
 %% Read-only props

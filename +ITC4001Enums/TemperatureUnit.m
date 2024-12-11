@@ -1,4 +1,4 @@
-classdef ITC4001TemperatureUnit
+classdef TemperatureUnit
     enumeration
         Kelvin
         Celsius
