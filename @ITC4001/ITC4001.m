@@ -42,15 +42,15 @@ classdef ITC4001 < handle
 % The state of the keylock [OnOffSwitchState]
         Key_lock (1,1) matlab.lang.OnOffSwitchState;
 % Temperature reading [ITC4001.T_unit]
-        T_reading (1,1) mustBeNumeric;
+        T_reading (1,1) {mustBeNumeric};
 % TEC current reading [A]
-        TEC_A_reading (1,1) mustBeNumeric;
+        TEC_A_reading (1,1) {mustBeNumeric};
 % TEC voltage reading [V]
-        TEC_V_reading (1,1) mustBeNumeric;
+        TEC_V_reading (1,1) {mustBeNumeric};
 % Laser current reading [A]
-        LD_A_reading (1,1) mustBeNumeric;
+        LD_A_reading (1,1) {mustBeNumeric};
 % Laser voltage reading [V]
-        LD_V_reading (1,1) mustBeNumeric;
+        LD_V_reading (1,1) {mustBeNumeric};
 % LD protection-tripped struct with two fields, name [string] and tripped
 % [logical]
         LD_protection_tripped (1,1) struct;
@@ -66,7 +66,7 @@ classdef ITC4001 < handle
 %
 % See also
 % ITC4001.bounds
-        T_setpoint (1,1) mustBeNumeric;
+        T_setpoint (1,1) {mustBeNumeric};
 % Laser state [OnOffSwitchState]
         LD (1,1) matlab.lang.OnOffSwitchState;
 % Laser current setpoint [A]. Note that there are two (sets of) limits that 
@@ -81,7 +81,7 @@ classdef ITC4001 < handle
 %
 % See also
 % ITC4001.bounds
-        LD_A_setpoint (1,1) mustBePositive;
+        LD_A_setpoint (1,1) {mustBePositive};
 % Upper limit for laser current setpoint [A]. Note that there are two (sets of)
 % limits that control the current for the laser: (1) the fixed limits for the
 % setpoint. These are capped at both ends by the ITC4001 device itself and is
@@ -94,7 +94,7 @@ classdef ITC4001 < handle
 %
 % See also
 % ITC4001.bounds
-        LD_A_limit (1,1) mustBePositive;
+        LD_A_limit (1,1) {mustBePositive};
 % Laser amplitude modulation state [OnOffSwitchState]
         LD_AM (1,1) matlab.lang.OnOffSwitchState;
 % Laser amplitude modulation source [ITC4001Enums.ModulationSource]
@@ -106,16 +106,16 @@ classdef ITC4001 < handle
 %
 % See also
 % ITC4001.bounds
-        LD_AM_frequency (1,1) mustBePositive;
+        LD_AM_frequency (1,1) {mustBePositive};
 % Internal laser amplitude modulation depth [%]. TODO: DOCUMENT WHAT THE FUCK
 % KINDA PERCENT THIS IS
 % The limits of this value is available in ITC4001.bounds.LD_AM_depth.
 %
 % See also
 % ITC4001.bounds
-        LD_AM_depth (1,1) mustBePositive;
+        LD_AM_depth (1,1) {mustBePositive};
     end
-    properties(SetAccess = immutable)
+    properties(SetAccess = private)
 % Array of structs with min and max-values for the following properties
 % ITC4001.LD_A_setpoint
 % ITC4001.LD_A_limit
@@ -136,7 +136,7 @@ classdef ITC4001 < handle
     %% SCPI props/commands/path
     properties(Constant = true, Access = protected)
         pTEC = 'OUTP2';
-        pTunit = 'UNIT:TEMPerature';
+        pTunit = 'UNIT:TEMP';
         pTsp = 'SOUR2:TEMP';
         pTECAread = 'MEAS:CURR3';
         pTECVread = 'MEAS:VOLT3';
@@ -218,6 +218,7 @@ classdef ITC4001 < handle
         end
         function set.T_unit(o, unit)
             o.write(o.pTunit, unit);
+            o.bounds.T_setpoint = o.query_numeric_bounds(o.pTsp);
         end
 
         function T = get.T_setpoint(o)
@@ -256,10 +257,19 @@ classdef ITC4001 < handle
         end
         
         function src = get.LD_AM_source(o)
-            src = ITC4001Enums.ModulationSource(o.query(o.pLDAMsrc));
+            res = o.query(o.pLDAMsrc);
+            if strcmpi(res,'INT,EXT')
+                src = ITC4001Enums.ModulationSource.Both;
+            else
+                src = ITC4001Enums.ModulationSource(res);
+            end
         end
         function set.LD_AM_source(o, src)
-            o.write(o.pLDAMsrc, src);
+            if src == ITC4001Enums.ModulationSource.Both
+                o.write(o.pLDAMsrc, 'INT,EXT');
+            else
+                o.write(o.pLDAMsrc, src);
+            end
         end
         
         function shape = get.LD_AM_shape(o)

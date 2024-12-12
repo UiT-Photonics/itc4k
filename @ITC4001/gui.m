@@ -30,6 +30,7 @@ function uip = gui(varargin)
         error('ITC4001:gui:nargin', ...
               'ITC4001.gui only accepts 0 or 1 arguments.');
     end
+    uip.DeleteFcn = @cb_panel_delete;
 
     n_rows = 22;
     row = 0;
@@ -61,13 +62,15 @@ function uip = gui(varargin)
                    'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
     g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.4f °C');
+                           'numeric', 'ValueDisplayFormat', '%.4f K', ...
+                           'ValueChangedFcn', @cb_set_Tsp);
     row = row + 1;
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
                           'Text', 'N/A');
     row = row + 1;
     [~, T_units] = enumeration('ITC4001Enums.TemperatureUnit');
-    g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, 'Items', T_units);
+    g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, 'Items', T_units, ...
+                       'ValueChangedFcn', @cb_set_Tunit);
     row = row + 1;
     g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
                     'Orientation', 'horizontal', ...
@@ -82,10 +85,12 @@ function uip = gui(varargin)
                         'Color', 'red');
     row = row + 1;
     g.LD_A_setpoint = gl_pair(gl, row, 'Current setpoint', @uieditfield, ...
-                              'numeric', 'ValueDisplayFormat', '%.4f A');
+                              'numeric', 'ValueDisplayFormat', '%.4f A', ...
+                              'ValueChangedFcn', @cb_set_LD_Asp);
     row = row + 1;
     g.LD_A_limit = gl_pair(gl, row, 'Current limit', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.4f A');
+                           'numeric', 'ValueDisplayFormat', '%.4f A', ...
+                           'ValueChangedFcn', @cb_set_LD_A_lim);
     row = row + 1;
     g.LD_A_reading = gl_pair(gl, row, 'Current reading', @uilabel, ...
                              'Text', 'N/A');
@@ -102,7 +107,10 @@ function uip = gui(varargin)
     gl_pos(uilabel(gl, 'Text', 'Laser Modulation', 'FontWeight', 'bold', ...
                    'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
-    gl_ms = gl_pair(gl, row, 'Source', @uigridlayout, [1 2]);
+    gl_ms = gl_pair(gl, row, 'Source', @uigridlayout, [1 2], ...
+                    'ColumnWidth', {'fit', 'fit'}, ...
+                    'RowHeight', {'fit'}, ...
+                    'Padding', [0 0 0 0]);
     g.LD_AM_src_int = gl_pos(uicheckbox(gl_ms, 'Text', 'Internal', ...
                                              'Tag', 'internal', ...
                                              'ValueChangedFcn', @cb_mod_src), ...
@@ -113,27 +121,41 @@ function uip = gui(varargin)
                                   1, 2);
     row = row + 1;
     [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
-    g.LD_AM_shape = gl_pair(gl, row, 'Internal mod. shape', ...
-                                 @uidropdown, 'Items', mod_shapes);
-    % left: frequency, depth, on
+    g.LD_AM_shape = gl_pair(gl, row, 'Internal mod. shape', @uidropdown, ...
+                            'Items', mod_shapes);
     row = row + 1;
     g.LD_AM_freq = gl_pair(gl, row, 'Internal mod. Frequency', @uieditfield, ...
                            'numeric', 'ValueDisplayFormat', '%.4f Hz');
     row = row + 1;
     g.LD_AM_depth = gl_pair(gl, row, 'Internal mod. Depth', @uieditfield, ...
                             'numeric', 'ValueDisplayFormat', '%.4f %%');
-
-    % TODO: CONTINUE HERE!!!
+    row = row + 1;
+    g.LD_AM = gl_pair(gl, row, 'Modulation', @uiswitch, 'slider', ...
+                      'Orientation', 'horizontal', ...
+                      'ValueChangedFcn', @cb_toggle_LD_AM);
 
     % lastly we update the devs and adjust the window if we created it
     enable_fields('off');
     update_dd_devs();
     if nargin == 0
         g.uif.Units = 'pixels';
-        g.uif.Position(3:4) = [290, 500];
+        root_unit = get(0, 'Units');
+        set(0, 'Units', 'pixels');
+        sz = get(0, 'ScreenSize');
+        set(0, 'Units', root_unit);
+        w = 290;
+        h = 666;
+        g.uif.Position = [(sz(3)-w)/2, (sz(4)-h)/2, w, h];
     end
 
     %% "pure" callbacks
+    function cb_panel_delete(~, ~)
+        if isa(s.dev, 'ITC4001'); s.dev.disconnect(); end
+        if isa(s.timer, 'timer') && strcmp(s.timer.Running, 'on')
+            s.timer.stop();
+        end
+    end
+
     function cb_toggle_conn(btn, dat)
         g.uif.Pointer = 'watch';
         drawnow();
@@ -145,15 +167,56 @@ function uip = gui(varargin)
         end
         g.uif.Pointer = 'arrow';
     end
-    function cb_toggle_TEC(btn, dat)
-        % TODO
+
+    function cb_set_Tsp(~, dat)
+        if dat.Value == dat.PreviousValue; return; end
+        s.dev.T_setpoint = dat.Value;
+    end
+
+    function cb_set_Tunit(~, dat)
+        if strcmp(dat.Value, dat.PreviousValue); return; end
+        s.dev.T_unit = dat.Value;
+        % gotta update the setpoint
+        set_numfield_lims(g.T_setpoint, s.dev.bounds.T_setpoint.min, ...
+                          s.dev.bounds.T_setpoint.max);
+        g.T_setpoint.Value = s.dev.T_setpoint;
+    end
+
+    function cb_toggle_TEC(~, dat)
+        s.dev.TEC = dat.Value;
+    end
+
+    function cb_set_LD_Asp(~, dat)
+        if dat.Value == dat.PreviousValue; return; end
+        s.dev.LD_A_setpoint = dat.Value;
+    end
+
+    function cb_set_LD_A_lim(~, dat)
+        if dat.Value == dat.PreviousValue; return; end
+        s.dev.LD_A_limit = dat.Value;
     end
 
     function cb_toggle_LD(btn, dat)
-        % TODO: CHECK THAT TEC IS ON AND ASK FIRST!!
+        if dat.Value && ~s.dev.TEC
+            sel = uiconfirm(g.uif, ...
+                            'TEC is not on! Are you sure you want to turn on the Laser?', ...
+                            'Possible overheating!', ...
+                            'Options', {'Yes', 'No'}, ...
+                            'DefaultOption', 2, ...
+                            'Icon', 'warning');
+            if strcmp(sel, 'No')
+                btn.Value = false;
+                return;
+            end
+        end
+        s.dev.LD = btn.Value;
     end
 
     function cb_mod_src(btn, dat)
+        % TODO
+    end
+
+    function cb_toggle_LD_AM(btn, dat)
         % TODO
     end
 
@@ -171,16 +234,15 @@ function uip = gui(varargin)
                                 'Connection Failed!', ...
                                 'Options', {'Yes', 'No'}, ...
                                 'DefaultOption', 1, ...
-                                "Icon", 'error');
+                                'Icon', 'error');
                 if strcmp(sel, 'Yes')
                     % visadevfind is from R2024a...
                     if exist('visadevfind', 'file') == 2; finder = @visadevfind;
                     else; finder = @instrfind; %#ok<INSTRF>
                     end
-                    g.dd_devs.Value
-                    v = finder('ResourceName', g.dd_devs.Value.ResourceName);
-                    if ~isempty(v)
-                        delete(v);
+                    dev = finder('ResourceName', g.dd_devs.Value.ResourceName);
+                    if ~isempty(dev)
+                        delete(dev);
                         uialert(g.uif, ...
                                 'Murder went well. Try connecting again!', ...
                                 'Kill confirmed.', ...
@@ -204,19 +266,31 @@ function uip = gui(varargin)
                           s.dev.bounds.LD_A_setpoint.max);
         set_numfield_lims(g.LD_A_limit, s.dev.bounds.LD_A_limit.min, ...
                           s.dev.bounds.LD_A_limit.max);
+        set_numfield_lims(g.LD_AM_freq, s.dev.bounds.LD_AM_frequency.min, ...
+                          s.dev.bounds.LD_AM_frequency.max);
+        set_numfield_lims(g.LD_AM_depth, s.dev.bounds.LD_AM_depth.min, ...
+                          s.dev.bounds.LD_AM_depth.max);
         s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
-                        'StartDelay', 0, 'TimerFcn', @(~,~) update_vals());
+                        'StartDelay', 0, 'TimerFcn', @(~,~) update_vals_bridge()); %update_vals());
         s.timer.start();
-        %update_vals();
         enable_fields('on');
         v = true;
+    end
+    function update_vals_bridge() 
+        try
+            update_vals();
+        catch me
+            disp(getReport(me, 'extended', 'hyperlinks', 'on'));
+        end
     end
 
     function v = disconnect_dev()
         v = true;
         enable_fields('off');
-        if ~isempty(s.dev); s.dev.disconnect(); end
-        if s.timer.Running; s.timer.stop(); end
+        if isa(s.dev, 'ITC4001'); s.dev.disconnect(); end
+        if isa(s.timer, 'timer') && strcmp(s.timer.Running, 'on')
+            s.timer.stop();
+        end
     end
 
     function set_numfield_lims(f, lmin, lmax)
@@ -243,16 +317,16 @@ function uip = gui(varargin)
 
         % temperature stuff
         g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
-        Tsp = s.dev.T_setpoint;
         T_unit = char(s.dev.T_unit);
         if T_unit(1) == 'K'; T_fmt = '%.4f K';
         else; T_fmt = ['%.4f °', T_unit(1)];
         end
-        set_if_neq(g.T_setpoint, Tsp);
-        if ~strcmpi(T_unit, g.T_unit.Value)
+        if g.T_unit.Value(1) ~= T_unit(1)
             g.T_setpoint.ValueDisplayFormat = T_fmt;
+            g.T_unit.Value = T_unit;
         end
-        if g.T_unit.Value(1) ~= T_unit(1); g.T_unit.Value = T_unit; end
+        Tsp = s.dev.T_setpoint;
+        set_if_neq(g.T_setpoint, Tsp);
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
         g.T_reading.Text = sprintf(T_fmt, s.dev.T_reading);
         
@@ -266,13 +340,31 @@ function uip = gui(varargin)
             g.LD_prot.Color = lamp_clrs{1};
             g.LD_prot.Tooltip = 'No protection tripped';
         end
-        if g.LD.Value ~= (s.dev.LD+1); g.LD.Value = g.LD.Items{s.dev.LD+1}; end
-        LDAsp = s.dev.LD_A_setpoint;
-        %if g.LD_A_setpoint
-        set_if_neq(g.LD_A_setpoint, LDAsp);
+        set_if_neq(g.LD_A_setpoint, s.dev.LD_A_setpoint);
+        set_if_neq(g.LD_A_limit, s.dev.LD_A_limit);
         % TODO: g.LD_A_reading.Background = [color_gradient from #00FFFF to #FF0000](LD_A - LDAsp)
         g.LD_A_reading.Text = sprintf('%.4f A', s.dev.LD_A_reading);
         g.LD_V_reading.Text = sprintf('%.4f V', s.dev.LD_V_reading);
+        if g.LD.Value ~= (s.dev.LD+1); g.LD.Value = g.LD.Items{s.dev.LD+1}; end
+
+        % Laser modulation stuff
+        am_src = s.dev.LD_AM_source == ...
+                 [ITC4001Enums.ModulationSource.Internal, ...
+                  ITC4001Enums.ModulationSource.External, ...
+                  ITC4001Enums.ModulationSource.Both];
+        g.LD_AM_src_int.Value = any(am_src([1,3]));
+        g.LD_AM_src_int.Value = any(am_src([2,3]));
+
+        am_shape = char(s.dev.LD_AM_shape);
+        if am_shape(1) ~= g.LD_AM_shape.Value(1)
+            g.LD_AM_shape.Value = am_shape;
+        end
+
+        set_if_neq(g.LD_AM_freq, s.dev.LD_AM_frequency);
+        set_if_neq(g.LD_AM_depth, s.dev.LD_AM_depth);
+        if g.LD_AM.Value ~= (s.dev.LD_AM+1)
+            g.LD_AM.Value = g.LD_AM.Items{s.dev.LD_AM+1};
+        end
     end
     function set_if_neq(c,v)
         if any(c.Value ~= v); c.Value = v; end
