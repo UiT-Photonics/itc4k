@@ -13,6 +13,8 @@ function uip = gui(varargin)
 %    laser_panel = ITC4001.gui(gl);
 %    mfc_panel = MyMassFlowControllerGui(gl); % you create this one
 %    result_plt = uiaxes(gl);
+%
+% TODO: make an easy to use "laser sweeper"
 
     % the state
     s = struct('dev', [], 'timer', []);
@@ -32,7 +34,7 @@ function uip = gui(varargin)
     end
     uip.DeleteFcn = @cb_panel_delete;
 
-    n_rows = 22;
+    n_rows = 23;
     row = 0;
     gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {120, '1x'}, ...
                       'RowHeight', repmat({'fit'}, 1, n_rows), ...
@@ -112,43 +114,43 @@ function uip = gui(varargin)
                     'RowHeight', {'fit'}, ...
                     'Padding', [0 0 0 0]);
     g.LD_AM_src_int = gl_pos(uicheckbox(gl_ms, 'Text', 'Internal', ...
-                                             'Tag', 'internal', ...
-                                             'ValueChangedFcn', @cb_mod_src), ...
-                                  1, 1);
+                                        'Tag', 'internal', ...
+                                        'ValueChangedFcn', @cb_set_LD_AM_src), ...
+                             1, 1);
     g.LD_AM_src_ext = gl_pos(uicheckbox(gl_ms, 'Text', 'External', ...
-                                             'Tag', 'external', ...
-                                             'ValueChangedFcn', @cb_mod_src), ...
-                                  1, 2);
+                                        'Tag', 'external', ...
+                                        'ValueChangedFcn', @cb_det_LD_AM_src), ...
+                             1, 2);
     row = row + 1;
     [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
     g.LD_AM_shape = gl_pair(gl, row, 'Internal mod. shape', @uidropdown, ...
-                            'Items', mod_shapes);
+                            'Items', mod_shapes, ...
+                            'ValueChangedFcn', @cb_set_LD_AM_shape);
     row = row + 1;
-    g.LD_AM_freq = gl_pair(gl, row, 'Internal mod. Frequency', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.4f Hz');
+    g.LD_AM_freq = gl_pair(gl, row, '(IM) Frequency', @uieditfield, ...
+                           'numeric', 'ValueDisplayFormat', '%.4f Hz', ...
+                           'ValueChangedFcn', @cb_set_LD_AM_freq);
     row = row + 1;
-    g.LD_AM_depth = gl_pair(gl, row, 'Internal mod. Depth', @uieditfield, ...
-                            'numeric', 'ValueDisplayFormat', '%.4f %%');
+    g.LD_AM_depth = gl_pair(gl, row, '(IM) Depth', @uieditfield, ...
+                            'numeric', 'ValueDisplayFormat', '%.4f %%', ...
+                            'ValueChangedFcn', @cb_set_LD_AM_depth);
     row = row + 1;
     g.LD_AM = gl_pair(gl, row, 'Modulation', @uiswitch, 'slider', ...
                       'Orientation', 'horizontal', ...
                       'ValueChangedFcn', @cb_toggle_LD_AM);
+    row = row + 1;
+    gl_pair(gl, row, 'Modulation Wizard', @uibutton, 'Text', 'Click me =)', ...
+            'ButtonPushedFcn', @(~,~) LD_AM_wizard());
 
     % lastly we update the devs and adjust the window if we created it
     enable_fields('off');
     update_dd_devs();
-    if nargin == 0
-        g.uif.Units = 'pixels';
-        root_unit = get(0, 'Units');
-        set(0, 'Units', 'pixels');
-        sz = get(0, 'ScreenSize');
-        set(0, 'Units', root_unit);
-        w = 290;
-        h = 666;
-        g.uif.Position = [(sz(3)-w)/2, (sz(4)-h)/2, w, h];
-    end
+    if nargin == 0; resz_and_center(g.uif, 290, 666, 0); end
 
     %% "pure" callbacks
+    % when i tried this out on some matlab version of windows it was easy to get
+    % the same value in d.Value as d.PreviousValue by e.g. pressing a button
+    % quickly, hence the checks everywhere.
     function cb_panel_delete(~, ~)
         if isa(s.dev, 'ITC4001'); s.dev.disconnect(); end
         if isa(s.timer, 'timer') && strcmp(s.timer.Running, 'on')
@@ -156,48 +158,51 @@ function uip = gui(varargin)
         end
     end
 
-    function cb_toggle_conn(btn, dat)
+    function cb_toggle_conn(c, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
         g.uif.Pointer = 'watch';
         drawnow();
-        if dat.Value == 1; btn.Value = connect_dev();
-        else; btn.Value = ~disconnect_dev();
+        if d.Value == 1; c.Value = connect_dev();
+        else; c.Value = ~disconnect_dev();
         end
-        if btn.Value == 1; btn.Text = 'Disconnect';
-        else; btn.Text = 'Connect';
+        if c.Value == 1; c.Text = 'Disconnect';
+        else; c.Text = 'Connect';
         end
         g.uif.Pointer = 'arrow';
     end
 
-    function cb_set_Tsp(~, dat)
-        if dat.Value == dat.PreviousValue; return; end
-        s.dev.T_setpoint = dat.Value;
+    function cb_set_Tsp(~, d)
+        if d.Value == d.PreviousValue; return; end
+        s.dev.T_setpoint = d.Value;
     end
 
-    function cb_set_Tunit(~, dat)
-        if strcmp(dat.Value, dat.PreviousValue); return; end
-        s.dev.T_unit = dat.Value;
+    function cb_set_Tunit(~, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
+        s.dev.T_unit = d.Value;
         % gotta update the setpoint
         set_numfield_lims(g.T_setpoint, s.dev.bounds.T_setpoint.min, ...
                           s.dev.bounds.T_setpoint.max);
         g.T_setpoint.Value = s.dev.T_setpoint;
     end
 
-    function cb_toggle_TEC(~, dat)
-        s.dev.TEC = dat.Value;
+    function cb_toggle_TEC(~, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
+        s.dev.TEC = d.Value;
     end
 
-    function cb_set_LD_Asp(~, dat)
-        if dat.Value == dat.PreviousValue; return; end
-        s.dev.LD_A_setpoint = dat.Value;
+    function cb_set_LD_Asp(~, d)
+        if d.Value == d.PreviousValue; return; end
+        s.dev.LD_A_setpoint = d.Value;
     end
 
-    function cb_set_LD_A_lim(~, dat)
-        if dat.Value == dat.PreviousValue; return; end
-        s.dev.LD_A_limit = dat.Value;
+    function cb_set_LD_A_lim(~, d)
+        if d.Value == d.PreviousValue; return; end
+        s.dev.LD_A_limit = d.Value;
     end
 
-    function cb_toggle_LD(btn, dat)
-        if dat.Value && ~s.dev.TEC
+    function cb_toggle_LD(c, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
+        if strcmp(d.Value, 'On') && ~s.dev.TEC
             sel = uiconfirm(g.uif, ...
                             'TEC is not on! Are you sure you want to turn on the Laser?', ...
                             'Possible overheating!', ...
@@ -205,19 +210,61 @@ function uip = gui(varargin)
                             'DefaultOption', 2, ...
                             'Icon', 'warning');
             if strcmp(sel, 'No')
-                btn.Value = false;
+                c.Value = 'Off';
                 return;
             end
         end
-        s.dev.LD = btn.Value;
+        s.dev.LD = d.Value;
     end
 
-    function cb_mod_src(btn, dat)
-        % TODO
+    function cb_set_LD_AM_src(c, d)
+        if d.Value == d.PreviousValue; return; end
+        % one thing to keep in mind here is that the possible states for the
+        % buttons together can only be <either> or <both>, never <neither>
+        src = s.dev.LD_AM_source;
+        if strcmp(d.Tag, 'internal')
+            unchecked_res = ITC4001Enums.ModulationSource.External;
+        elseif strcmp(d.Tag, 'external')
+            unchecked_res = ITC4001Enums.ModulationSource.Internal;
+        else
+            warning('ITC4001:gui:unknown_LD_AM_source', ...
+                    'Unknown LD_AM_source "%s"', c.Tag);
+            c.Value = d.PreviousValue;
+        end
+
+        if d.Value % checkbox has been checked
+            if src == unchecked_res
+                s.dev.LD_AM_source = ITC4001Enums.ModulationSource.Both;
+            end
+        else % checkbox has been unchecked..
+            if src == ITC4001Enums.ModulationSource.Both
+                s.dev.LD_AM_source = unchecked_res;
+            else
+                % ..but if src ~= <both> (i.e. the other checkbox is not
+                % checked) we have to recheck the invoking box.
+                c.Value = true;
+            end
+        end
     end
 
-    function cb_toggle_LD_AM(btn, dat)
-        % TODO
+    function cb_set_LD_AM_shape(~, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
+        s.dev.LD_AM_shape = d.Value;
+    end
+
+    function cb_set_LD_AM_freq(~, d)
+        if d.Value == d.PreviousValue; return; end
+        s.dev.LD_AM_frequency = d.Value;
+    end
+
+    function cb_set_LD_AM_depth(~, d)
+        if d.Value == d.PreviousValue; return; end
+        s.dev.LD_AM_depth = d.Value;
+    end
+
+    function cb_toggle_LD_AM(~, d)
+        if strcmp(d.Value, d.PreviousValue); return; end
+        s.dev.LD_AM = d.Value;
     end
 
     %% supporting functions
@@ -271,12 +318,13 @@ function uip = gui(varargin)
         set_numfield_lims(g.LD_AM_depth, s.dev.bounds.LD_AM_depth.min, ...
                           s.dev.bounds.LD_AM_depth.max);
         s.timer = timer('ExecutionMode', 'fixedSpacing', 'Period', 1, ...
-                        'StartDelay', 0, 'TimerFcn', @(~,~) update_vals_bridge()); %update_vals());
+                        'StartDelay', 0, 'TimerFcn', @(~,~) update_vals()); %update_vals_bridge());
         s.timer.start();
         enable_fields('on');
         v = true;
     end
-    function update_vals_bridge() 
+    function update_vals_bridge() %#ok<DEFNU>
+% this one's aroudn to debug failures when running the timer
         try
             update_vals();
         catch me
@@ -300,7 +348,7 @@ function uip = gui(varargin)
     end
 
     function enable_fields(tf)
-        blacklist = {'uif', 'dd_devs'};
+        blacklist = {'uif', 'uifm', 'dd_devs'};
         for nm_cell = reshape(fieldnames(g), 1, [])
             if any(strcmp(nm_cell, blacklist)); continue;
             else; nm = nm_cell{1};
@@ -316,7 +364,6 @@ function uip = gui(varargin)
         g.Key_lock.Color = lamp_clrs{logical(s.dev.Key_lock)+1};
 
         % temperature stuff
-        g.TEC.Value = g.TEC.Items{s.dev.TEC+1};
         T_unit = char(s.dev.T_unit);
         if T_unit(1) == 'K'; T_fmt = '%.4f K';
         else; T_fmt = ['%.4f °', T_unit(1)];
@@ -329,6 +376,11 @@ function uip = gui(varargin)
         set_if_neq(g.T_setpoint, Tsp);
         % TODO: g.T_reading.Background = [color_gradient from #00FFFF to #FF0000](T - Tsp)
         g.T_reading.Text = sprintf(T_fmt, s.dev.T_reading);
+        % dunno why uisliders dont have matlab.lang.OnOffSwitchState values..
+        TEC_state = s.dev.TEC;
+        if ~strcmpi(g.TEC.Value, TEC_state)
+            g.TEC.Value = g.TEC.Items{TEC_state+1};
+        end
         
         % Laser stuff
         LD_tripped = s.dev.LD_protection_tripped.tripped;
@@ -336,7 +388,7 @@ function uip = gui(varargin)
             g.LD_prot.Color = lamp_clrs{2};
             g.LD_prot.Tooltip = sprintf('Tripped protection(s): %s', ...
                                         strjoin(s.dev.LD_protection_tripped.name(LD_tripped), ', '));
-        elseif strcmpi(g.LD_prot.Color, lamp_clrs{2})
+        elseif g.LD_prot.Color(1) == 1 % TODO: make better
             g.LD_prot.Color = lamp_clrs{1};
             g.LD_prot.Tooltip = 'No protection tripped';
         end
@@ -345,7 +397,10 @@ function uip = gui(varargin)
         % TODO: g.LD_A_reading.Background = [color_gradient from #00FFFF to #FF0000](LD_A - LDAsp)
         g.LD_A_reading.Text = sprintf('%.4f A', s.dev.LD_A_reading);
         g.LD_V_reading.Text = sprintf('%.4f V', s.dev.LD_V_reading);
-        if g.LD.Value ~= (s.dev.LD+1); g.LD.Value = g.LD.Items{s.dev.LD+1}; end
+        LD_state = s.dev.LD;
+        if ~strcmpi(g.LD.Value, LD_state)
+            g.LD.Value = g.LD.Items{LD_state+1};
+        end
 
         % Laser modulation stuff
         am_src = s.dev.LD_AM_source == ...
@@ -353,17 +408,18 @@ function uip = gui(varargin)
                   ITC4001Enums.ModulationSource.External, ...
                   ITC4001Enums.ModulationSource.Both];
         g.LD_AM_src_int.Value = any(am_src([1,3]));
-        g.LD_AM_src_int.Value = any(am_src([2,3]));
+        g.LD_AM_src_ext.Value = any(am_src([2,3]));
 
-        am_shape = char(s.dev.LD_AM_shape);
-        if am_shape(1) ~= g.LD_AM_shape.Value(1)
-            g.LD_AM_shape.Value = am_shape;
+        LD_AM_shape = char(s.dev.LD_AM_shape);
+        if ~strcmpi(g.LD_AM_shape.Value, LD_AM_shape)
+            g.LD_AM_shape.Value = LD_AM_shape;
         end
 
         set_if_neq(g.LD_AM_freq, s.dev.LD_AM_frequency);
         set_if_neq(g.LD_AM_depth, s.dev.LD_AM_depth);
-        if g.LD_AM.Value ~= (s.dev.LD_AM+1)
-            g.LD_AM.Value = g.LD_AM.Items{s.dev.LD_AM+1};
+        LD_AM_state = s.dev.LD_AM;
+        if ~strcmpi(g.LD_AM.Value, LD_AM_state)
+            g.LD_AM.Value = g.LD_AM.Items{LD_AM_state+1};
         end
     end
     function set_if_neq(c,v)
@@ -381,7 +437,32 @@ function uip = gui(varargin)
         g.uif.Pointer = 'arrow';
     end
 
+    function LD_AM_wizard()
+        g.uifm = uifigure('Name', 'ITC4001 > Modulation wizard', ...
+                          'WindowStyle','modal');
+        resz_and_center(g.uifm, 290, 300, g.uif);
+
+        % TODO: build the thing
+
+        uitwait(g.uif);
+    end
+
     %% gui building stuff
+    function p = resz_and_center(win, w, h, parent_win)
+        pu = get(parent_win, 'Units');
+        wu = get(win, 'Units');
+        set([parent_win, win], 'Units', 'pixels');
+        if isprop(parent_win, 'Position')
+            p = get(parent_win, 'Position');
+            set(win, 'Position', [p(1)+p(3)-w/2, p(2)+p(4)-h/2, w, h]);
+        elseif isprop(parent_win, 'ScreenSize')
+            sz = get(parent_win, 'ScreenSize');
+            set(win, 'Position', [(sz(3)-w)/2, (sz(4)-h)/2, w, h]);
+        end
+        set(win, 'Units', wu);
+        set(parent_win, 'Units', pu);
+    end
+
     function ctrl = gl_pair(gl, r, s, fn, varargin)
 % helper for grid layout label-control pairs, args are:
 %   gl    - grid layout
