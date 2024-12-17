@@ -5,6 +5,11 @@ Simple matlab class and gui to control the
 ## Status
 Not done yet, any day now tho =)
 
+## Min matlab version
+I *think* R2021a, but I'm not sure. Please send an
+[email](mailto:ragnar.seton@uit.no)
+if it turns out I'm wrong on this.
+
 ## Other Requirements
 This class requires the
 [Instrument control toolbox](https://se.mathworks.com/products/instrument.html)
@@ -18,17 +23,14 @@ three different VISA drivers but I've only tested the class with the one from
 I would advice against using the NI one since the install process is completely
 broken.
 
-## Min matlab version
-I *think* R2021a, but I'm not sure. Please send an
-[email](mailto:ragnar.seton@uit.no)
-if it turns out I'm wrong on this.
-
 ## Install
-If you have not adjusted your `userpath` you can just download this repo to your
-~/Documents/MATLAB folder, unzip it and run
+You can just download this repo to your ~/Documents/MATLAB folder, unzip it and
+run
 ```
 addpath([userpath(), filesep(), 'itc4001']);
 ```
+Maybe I'll publish it on the file exchange once I get around to mirroring this
+repo on github.
 
 ## Basic usage
 Connect your ITC4001 with a usb cable, turn it on and run `ITC4001.gui()`.
@@ -38,10 +40,10 @@ See `help ITC4001`.
 
 ## Notes
 I want to emphasize *simple class*, you really can't do more than set the
-value/range for the TEC and LD and turn them on/off. It shold be fairly easy to
-extend tho. All the controlling logic is in the itc4001-class, the gui is just a
-static function that creates an object and provides a uifigure-based user
-interface to it.
+setpoint for the TEC, LD, adjust some LD amplitude and modulation settings and
+turn them on/off. It shold be fairly easy to extend tho. All the controlling
+logic is in the itc4001-class, the gui is just a static function that creates
+an object and provides a uifigure-based user interface to it.
 
 ## Screenshot
 ![Screenshot of the GUI](screenshot.png "Screenshot of the GUI")
