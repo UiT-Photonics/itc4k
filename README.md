@@ -1,9 +1,9 @@
-## Thorlabs ITC4001 controller
+# Thorlabs ITC4001 class
 Simple matlab class and gui to control the
 [Thorlabs ITC4001 Benchtop Laser Diode/TEC Controller](https://www.thorlabs.de/thorProduct.cfm?partNumber=ITC4001).
 
 ## Status
-Not done yet, any day now tho =)
+Kinda working, I should probably test it some more tho =)
 
 ## Min matlab version
 I *think* R2021a, but I'm not sure. Please send an
