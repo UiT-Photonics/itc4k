@@ -5,7 +5,7 @@ Simple matlab class and gui to control the
 ## Status
 Not done yet, any day now tho =)
 
-## Requirements
+## Other Requirements
 This class requires the
 [Instrument control toolbox](https://se.mathworks.com/products/instrument.html)
 and unfortunately also a VISA driver. While matlab's VISA interface
@@ -21,9 +21,7 @@ broken.
 ## Min matlab version
 I *think* R2021a, but I'm not sure. Please send an
 [email](mailto:ragnar.seton@uit.no)
-or create a
-[merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-on gitlab if it turns out I'm wrong on this.
+if it turns out I'm wrong on this.
 
 ## Install
 If you have not adjusted your `userpath` you can just download this repo to your
@@ -44,3 +42,6 @@ value/range for the TEC and LD and turn them on/off. It shold be fairly easy to
 extend tho. All the controlling logic is in the itc4001-class, the gui is just a
 static function that creates an object and provides a uifigure-based user
 interface to it.
+
+## Screenshot
+![Screenshot of the GUI](screenshot.png "Screenshot of the GUI")

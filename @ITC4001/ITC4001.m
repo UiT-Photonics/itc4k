@@ -1,16 +1,29 @@
 classdef ITC4001 < handle
-% TODO:
-% - temperature protection tripped property
-% - LD_W_*-stuff, like LD_A_* but for power
-% - modulation, so the whole SOUR1:AM:*-shenanigans
+% Simple class to make it easier to interact with your ITC4001 in constant
+% current mode. Should - IN THEORY - work with any ITC4000 model but since i
+% haven't tested it i'm releasing it under this name and with no implied support
+% for any device but the 4001... you'll just have to send me some drivers to
+% test or figure out how to instatiate an object with a different device.
+% 
+% Example
+% ITC4001.gui; % launch the gui and work from there
 %
-% see https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
-% see page 41 in programmers manual for sweeps
+% Examplier example
+% o = ITC4001;                  % use the first driver we find
+% o.LD_AM_source = 'internal';  % use the internal modulation source
+% o.LD_AM_shape = 'sin';        % sinus wave modulation
+% o.LD_AM_frequency = 10e3;     % 10 kHz frequncy
+% [sp, depth] = o.lims2AM_depth(0.2, 0.4);  % sweep from 0.2 to 0.4 A
+% o.LD_A_setpoint = sp;
+% o.LD_AM_depth = depth;
+% o.TEC = 'on';                 % turn on tec
+% pause(10);                    % wait for temp stabilize
+% assert(~o.Key_lock, 'You gotta turn the key dummy!');
+% o.LD_AM = 'on';               % turn on modulation
+% o.LD = 'on';                  % and burn baby burn!
 %
-% With setpoint at 330 and modulation depth 2 (%?) it goes from 270 to 390,
-% roughly betwen 330 * (1-0.2) to 330 * (1+0.2)
-% same but with mod depth 5% it goes from 180 to 479 which is kinda close to
-% 330 * (1 - 0.5) to 330 * (1 + 0.5)
+% IMPORTANT NOTE
+% The modulation calculations only support constant current mode at the moment!
 %
 % (Developer-ish) Notes
 % The properties of this class only abstracts a small fraction of all the SCPI
@@ -24,7 +37,15 @@ classdef ITC4001 < handle
 % out if you want to subclass or just check some extra props from the command
 % line.
 %
+% TODO
+% - temperature protection tripped property
+% - LD_W_*-stuff, like LD_A_* but for power
+% - make it a better visadev citizen, see
+%   https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
+%
 % Possible future addons
+% - Test it with some other ITC4000-series devices to ensure that it works
+%   properly, then remove the 
 % - Make it work for LDC4000-series, shold really just be to add another SCPI
 %   props-section (and adjust the usage accordingly). or maybe an abstract class
 %   that then gets subclassed with or something..
@@ -107,12 +128,19 @@ classdef ITC4001 < handle
 % See also
 % ITC4001.bounds
         LD_AM_frequency (1,1) {mustBePositive};
-% Internal laser amplitude modulation depth [%]. TODO: DOCUMENT WHAT THE FUCK
-% KINDA PERCENT THIS IS
+% Internal laser amplitude modulation depth [%]. This property sets the
+% modulation peak-to-peak amplitude to its value as a percent of
+% ITC4001.bounds.LD_A_limit.max. As an example, if you set the current setpoint
+% to 0.04 A, the depth to 3%, and ITC4001.bounds.LD_A_limit.max is 1.01 A
+% (common value for the ITC4001) your current output will sweep from 0.0179 A to
+% 0.0481 A, i.e. 0.04 + [-0.5 0.5] .* 1.01 * 3*1e-2, or more generally:
+% ITC4001.LD_A_setpoint + [-0.5 0.5] .* ITC4001.bounds.LD_A_limit.max * ITC4001.LD_AM_depth*1e-2
+% If you know which current range you want to sweep over but do not want to
+% calculate the setpoint and depth you can use the ITC4001.lims2AM_depth.
 % The limits of this value is available in ITC4001.bounds.LD_AM_depth.
 %
 % See also
-% ITC4001.bounds
+% ITC4001.bounds, ITC4001.LD_A_setpoint, ITC4001.lims2AM_depth
         LD_AM_depth (1,1) {mustBePositive};
     end
     properties(SetAccess = private)
@@ -195,6 +223,10 @@ classdef ITC4001 < handle
                     error('ITC4001:constructor:arg_class', ...
                           'Constructor only accepts a struct or a string as argument.');
                 end
+                if ~strcmp(o.dev.Model, "ITC4001")
+                    warning('ITC4001:constructor:scaryboi', ...
+                            'This class has only been tested with ITC4001s - hence the name. Proceed with caution or you''ll fry your laser and/or driver..');
+                end
             else
                 error('ITC4001:constructor:nargin', ...
                       'Constructor only accepts 0 or 1 arguments.');
@@ -206,23 +238,46 @@ classdef ITC4001 < handle
             o.bounds.LD_AM_depth = o.query_numeric_bounds(o.pLDAMdepth);
         end
 
-        function varargout = AM_from_limits(o, minA, maxA)
-            assert(minA < maxA, 'ITC4001.AM_from_limits.limits.sort', ...
-                   'lower limit (%f) must be lower than upper limit (%f)', ...
+        function [sp, depth] = lims2AM_depth(o, minA, maxA)
+% [sp, depth] = ITC4001.lims2AM_dept(o, minA, maxA) returns the
+% ITC4001.LD_A_setpoint value, sp, and ITC4001.LD_AM_depth value, depth,
+% required to sweep the laser current from minA to maxA.
+%
+% Example
+% o = ITC4001;
+% o.LD_AM_source = ITC4001Enums.ModulationSource.Internal;
+% o.LD_AM_shape = ITC4001Enums.ModulationShape.Sinusoid;
+% o.LD_AM_frequency = 10e3;
+% [sp, depth] = o.lims2AM_depth(0.2, 0.4);
+% o.LD_A_setpoint = sp;
+% o.LD_AM_depth = depth;
+% % this will sweep the laser current from 0.2 A to 0.4 A like a sinus wave at
+% % 10 kHZ.
+%
+% See also
+% ITC4001.LD_A_setpoint, ITC4001.LD_AM_depth
+            assert(minA < maxA, 'ITC4001:lims2AM_depth:limits:sort', ...
+                   'Lower limit (%f) must be less than upper limit (%f)', ...
                    minA, maxA);
             assert(minA >= o.bounds.LD_A_limit.min && ...
                    maxA <= o.bounds.LD_A_limit.max, ...
-                   'ITC4001.AM_from_limits.limits.oob', ...
-                   'Provided limits (%f, %f) outside of limits (%f, %f)', ...
+                   'ITC4001:lims2AM_depth:limits:oob', ...
+                   'Provided limits (%f, %f) exceeds device limits (%.4f, %.4f)', ...
                    minA, maxA, o.bounds.LD_A_limit.min, ...
                    o.bounds.LD_A_limit.max);
-            sp = (maxA - minA)/2;
+            p2p = (maxA - minA);
+            sp = minA + p2p/2;
             assert(o.bounds.LD_A_setpoint.min <= sp && ...
                    sp <= o.bounds.LD_A_setpoint.max, ...
-                   'ITC4001.AM_from_limits.sp.oob', ...
-                   'Calculated setpoint (%f) outside of limits (%f, %f)', ...
+                   'ITC4001:lims2AM_depth:setpoint:oob', ...
+                   'Calculated setpoint (%f) exceeds device limits (%.4f, %.4f)', ...
                    sp, o.bounds.LD_A_setpoint.min, o.bounds.LD_A_setpoint.max);
-            % TODO: depth should be calced from this..
+            depth = 100 * p2p/o.bounds.LD_A_limit.max;
+            assert(o.bounds.LD_AM_depth.min <= depth && ...
+                   depth <= o.bounds.LD_AM_depth.max, ...
+                   'ITC4001:lims2AM_depth:depth:oob', ...
+                   'Calculated depth (%f) exceeds device limits (%.1f, %.1f)', ...
+                   depth, o.bounds.LD_AM_depth.min, o.bounds.LD_AM_depth.max);
         end
 
 %% Read-write props

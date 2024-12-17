@@ -1,4 +1,7 @@
-function uip = gui(varargin)
+function varargout = gui(varargin)
+% ITC4001.gui(); opens a graphical user interface to connect, control and
+% disconnect from an ITC4001.
+%
 % uip = ITC4001.gui(); creates a gui to control a ITC4001 and returns the handle 
 % of the uipanel that contains all the controls that has been created in a new
 % uifigure.
@@ -34,7 +37,7 @@ function uip = gui(varargin)
     end
     uip.DeleteFcn = @cb_panel_delete;
 
-    n_rows = 23;
+    n_rows = 22;
     row = 0;
     gl = uigridlayout(uip, [n_rows 2], 'ColumnWidth', {120, '1x'}, ...
                       'RowHeight', repmat({'fit'}, 1, n_rows), ...
@@ -64,7 +67,7 @@ function uip = gui(varargin)
                    'HorizontalAlignment', 'center'), row, [1 2]);
     row = row + 1;
     g.T_setpoint = gl_pair(gl, row, 'Temperature setpoint', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.4f K', ...
+                           'numeric', 'ValueDisplayFormat', '%.3f K', ...
                            'ValueChangedFcn', @cb_set_Tsp);
     row = row + 1;
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
@@ -77,6 +80,51 @@ function uip = gui(varargin)
     g.TEC = gl_pair(gl, row, 'TEC', @uiswitch, 'slider', ...
                     'Orientation', 'horizontal', ...
                     'ValueChangedFcn', @cb_toggle_TEC);
+
+    % Laser modulation section
+    row = row + 1;
+    gl_pos(uilabel(gl, 'Text', 'Laser Modulation', 'FontWeight', 'bold', ...
+                   'HorizontalAlignment', 'center'), row, [1 2]);
+    row = row + 1;
+    gl_ms = gl_pair(gl, row, 'Source', @uigridlayout, [1 2], ...
+                    'ColumnWidth', {'fit', 'fit'}, ...
+                    'RowHeight', {'fit'}, ...
+                    'Padding', [0 0 0 0]);
+    g.LD_AM_src_int = gl_pos(uicheckbox(gl_ms, 'Text', 'Internal', ...
+                                        'Tag', 'internal', ...
+                                        'ValueChangedFcn', @cb_set_LD_AM_src), ...
+                             1, 1);
+    g.LD_AM_src_ext = gl_pos(uicheckbox(gl_ms, 'Text', 'External', ...
+                                        'Tag', 'external', ...
+                                        'ValueChangedFcn', @cb_det_LD_AM_src), ...
+                             1, 2);
+    row = row + 1;
+    [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
+    g.LD_AM_shape = gl_pair(gl, row, '(IM) Shape', @uidropdown, ...
+                            'Items', mod_shapes, ...
+                            'ValueChangedFcn', @cb_set_LD_AM_shape);
+    row = row + 1;
+    g.LD_AM_freq = gl_pair(gl, row, '(IM) Frequency', @uieditfield, ...
+                           'numeric', 'ValueDisplayFormat', '%u Hz', ...
+                           'ValueChangedFcn', @cb_set_LD_AM_freq);
+    row = row + 1;
+    gl_d = gl_pair(gl, row, '(IM) Depth', @uigridlayout, [1 2], ...
+                   'ColumnWidth', {'1x', 'fit'}, ...
+                   'RowHeight', {'fit'}, ...
+                   'Padding', [0 0 0 0]);
+    g.LD_AM_depth = gl_pos(uieditfield(gl_d, 'numeric', ...
+                                       'ValueDisplayFormat', '%.1f %%', ...
+                                       'ValueChangedFcn', @cb_set_LD_AM_depth), ...
+                           1, 1);
+    % just storing this one to dis/enable no dis/connect
+    g.d_wiz = gl_pos(uibutton(gl_d, 'Text', '', 'Icon', 'question', ...
+                              'Tooltip', 'Click to open a calculator that generates modulation depth and current setpoint based on current limits.', ...
+                              'ButtonPushedFcn', @(~,~) LD_AM_wizard()), ...
+                     1, 2);
+    row = row + 1;
+    g.LD_AM = gl_pair(gl, row, 'Modulation', @uiswitch, 'slider', ...
+                      'Orientation', 'horizontal', ...
+                      'ValueChangedFcn', @cb_toggle_LD_AM);
 
     % Laser section
     row = row + 1;
@@ -104,48 +152,11 @@ function uip = gui(varargin)
                    'Orientation', 'horizontal', ...
                    'ValueChangedFcn', @cb_toggle_LD);
 
-    % Laser modulation
-    row = row + 1;
-    gl_pos(uilabel(gl, 'Text', 'Laser Modulation', 'FontWeight', 'bold', ...
-                   'HorizontalAlignment', 'center'), row, [1 2]);
-    row = row + 1;
-    gl_ms = gl_pair(gl, row, 'Source', @uigridlayout, [1 2], ...
-                    'ColumnWidth', {'fit', 'fit'}, ...
-                    'RowHeight', {'fit'}, ...
-                    'Padding', [0 0 0 0]);
-    g.LD_AM_src_int = gl_pos(uicheckbox(gl_ms, 'Text', 'Internal', ...
-                                        'Tag', 'internal', ...
-                                        'ValueChangedFcn', @cb_set_LD_AM_src), ...
-                             1, 1);
-    g.LD_AM_src_ext = gl_pos(uicheckbox(gl_ms, 'Text', 'External', ...
-                                        'Tag', 'external', ...
-                                        'ValueChangedFcn', @cb_det_LD_AM_src), ...
-                             1, 2);
-    row = row + 1;
-    [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
-    g.LD_AM_shape = gl_pair(gl, row, 'Internal mod. shape', @uidropdown, ...
-                            'Items', mod_shapes, ...
-                            'ValueChangedFcn', @cb_set_LD_AM_shape);
-    row = row + 1;
-    g.LD_AM_freq = gl_pair(gl, row, '(IM) Frequency', @uieditfield, ...
-                           'numeric', 'ValueDisplayFormat', '%.4f Hz', ...
-                           'ValueChangedFcn', @cb_set_LD_AM_freq);
-    row = row + 1;
-    g.LD_AM_depth = gl_pair(gl, row, '(IM) Depth', @uieditfield, ...
-                            'numeric', 'ValueDisplayFormat', '%.4f %%', ...
-                            'ValueChangedFcn', @cb_set_LD_AM_depth);
-    row = row + 1;
-    g.LD_AM = gl_pair(gl, row, 'Modulation', @uiswitch, 'slider', ...
-                      'Orientation', 'horizontal', ...
-                      'ValueChangedFcn', @cb_toggle_LD_AM);
-    row = row + 1;
-    gl_pair(gl, row, 'Modulation Wizard', @uibutton, 'Text', 'Click me =)', ...
-            'ButtonPushedFcn', @(~,~) LD_AM_wizard());
-
     % lastly we update the devs and adjust the window if we created it
     enable_fields('off');
     update_dd_devs();
     if nargin == 0; resz_and_center(g.uif, 290, 666, 0); end
+    if nargout > 0; varargout{1} = uip; end
 
     %% "pure" callbacks
     % when i tried this out on some matlab version of windows it was easy to get
@@ -343,12 +354,13 @@ function uip = gui(varargin)
 
     function set_numfield_lims(f, lmin, lmax)
         f.Limits = [lmin lmax];
-        f.Tooltip = sprintf('%.4f - %.4f', lmin, lmax);
+        fmt = char(f.ValueDisplayFormat);
+        f.Tooltip = sprintf([fmt,' - ', fmt], lmin, lmax);
         f.Placeholder = f.Tooltip;
     end
 
     function enable_fields(tf)
-        blacklist = {'uif', 'uifm', 'dd_devs'};
+        blacklist = {'uif', 'uifm', 'wiz', 'dd_devs'};
         for nm_cell = reshape(fieldnames(g), 1, [])
             if any(strcmp(nm_cell, blacklist)); continue;
             else; nm = nm_cell{1};
@@ -361,7 +373,17 @@ function uip = gui(varargin)
         lamp_clrs = {'green', 'red'};
         % TODO
         % - values should not be set if the control has the focus
-        g.Key_lock.Color = lamp_clrs{logical(s.dev.Key_lock)+1};
+        if ~s.dev.Key_lock
+            if g.Key_lock.Color(1) == 1
+                g.Key_lock.Color = lamp_clrs{1};
+                g.Key_lock.Tooltip = 'Key lock is off!';
+            end
+        else
+            if g.Key_lock.Color(1) ~= 1
+                g.Key_lock.Color = lamp_clrs{2};
+                g.Key_lock.Tooltip = 'Key lock is on!';
+            end
+        end
 
         % temperature stuff
         T_unit = char(s.dev.T_unit);
@@ -437,14 +459,60 @@ function uip = gui(varargin)
         g.uif.Pointer = 'arrow';
     end
 
+    %% depth calculator ("wizard") section
     function LD_AM_wizard()
-        g.uifm = uifigure('Name', 'ITC4001 > Modulation wizard', ...
+        g.uifm = uifigure('Name', 'Modulation depth calculator', ...
                           'WindowStyle','modal');
-        resz_and_center(g.uifm, 290, 300, g.uif);
-
-        % TODO: build the thing
-
-        uitwait(g.uif);
+        resz_and_center(g.uifm, 290, 140, g.uif);
+        g.wiz = struct();
+        gl_wiz = uigridlayout(g.uifm, [4 2], 'ColumnWidth', {120, '1x'}, ...
+                              'RowHeight', repmat({'fit'}, 1, 4), ...
+                              'Scrollable', 'on');
+        g.wiz.sp = g.LD_A_setpoint.Value;
+        g.wiz.d = g.LD_AM_depth.Value;
+        half_p2p = s.dev.bounds.LD_A_limit.max * g.wiz.d * 0.01 / 2;
+        g.wiz.min = gl_pair(gl_wiz, 1, 'Min current', @uieditfield, ...
+                            'numeric', 'Value', g.wiz.sp - half_p2p, ...
+                            'ValueDisplayFormat', '%.4f A', ...
+                            'ValueChangedFcn', @cb_wiz_calc);
+        g.wiz.max = gl_pair(gl_wiz, 2, 'Max current', @uieditfield, ...
+                            'numeric', 'Value', g.wiz.sp + half_p2p, ...
+                            'ValueDisplayFormat', '%.4f A', ...
+                            'ValueChangedFcn', @cb_wiz_calc);
+        set_numfield_lims(g.wiz.min, s.dev.bounds.LD_A_limit.min, ...
+                          s.dev.bounds.LD_A_limit.max);
+        set_numfield_lims(g.wiz.max, s.dev.bounds.LD_A_limit.min, ...
+                          s.dev.bounds.LD_A_limit.max);
+        g.wiz.lbl = gl_pair(gl_wiz, 3, '(IM) Depth / Setpoint', @uilabel, ...
+                            'Text', sprintf('%.4f A / %.1f %%', ...
+                                            g.wiz.sp, g.wiz.d));
+        g.wiz.btn = gl_pos(uibutton(gl_wiz, 'Text', 'Store values & close!', ...
+                                    'ButtonPushedFcn', @cb_wiz_store, ...
+                                    'Enable', 'off', ...
+                                    'Tooltip', 'Values can not be stored while LD is on.'), ...
+                           4, [1 2]);
+        if strcmpi(s.dev.LD, 'off')
+            g.wiz.btn.Enable = 'on';
+            g.wiz.btn.Tooltip = 'Click to set calculated values';
+        end
+        uiwait(g.uifm);
+    end
+    function cb_wiz_calc(f, d)
+        try
+            [sp, d] = s.dev.lims2AM_depth(g.wiz.min.Value, g.wiz.max.Value);
+        catch e
+            uialert(g.uifm, e.message, 'Calculation error!');
+            f.Value = d.PreviousValue;
+            return;
+        end
+        g.wiz.lbl.Text = sprintf('%.4f A / %.1f %%', sp, d);
+        g.wiz.sp = sp;
+        g.wiz.d = d;
+    end
+    function cb_wiz_store(~,~)
+        s.dev.LD_A_setpoint = g.wiz.sp;
+        s.dev.LD_AM_depth = g.wiz.d;
+        delete(g.uifm);
     end
 
     %% gui building stuff
@@ -454,7 +522,7 @@ function uip = gui(varargin)
         set([parent_win, win], 'Units', 'pixels');
         if isprop(parent_win, 'Position')
             p = get(parent_win, 'Position');
-            set(win, 'Position', [p(1)+p(3)-w/2, p(2)+p(4)-h/2, w, h]);
+            set(win, 'Position', [p(1)+(p(3)-w)/2, p(2)+(p(4)-h)/2, w, h]);
         elseif isprop(parent_win, 'ScreenSize')
             sz = get(parent_win, 'ScreenSize');
             set(win, 'Position', [(sz(3)-w)/2, (sz(4)-h)/2, w, h]);
@@ -477,27 +545,6 @@ function uip = gui(varargin)
         else; ctrl = fn;
         end
         gl_pos(ctrl, r, 2);
-    end
-    function [c1, c2] = gl_range_pair(gl, r, s, fn, varargin)
-% like gl_pair but instead of of a single ctrl it makes two with a dash
-% inbetween.
-%   gl    - grid layout
-%   r     - row
-%   s     - label string
-%   fn    - controls creation function, e.g. @uibutton
-% any argument following fn will be pased to fn following gl.
-        l = uilabel(gl, 'Text', [s, ':'], 'HorizontalAlignment', 'right', ...
-                    'Interpreter', 'html');
-        gl_pos(l, r, 1);
-        igl = uigridlayout(gl, [1 3], 'ColumnWidth', {'1x', 'fit', '1x'}, ...
-                           'ColumnSpacing', 0, 'Padding', 0);
-        gl_pos(igl, r, 2);
-        c1 = fn(igl, varargin{:});
-        gl_pos(c1, 1, 1);
-        l = uilabel(igl, 'Text', ' - ', 'HorizontalAlignment', 'center');
-        gl_pos(l, 1, 2);
-        c2 = fn(igl, varargin{:});
-        gl_pos(c2, 1, 3);
     end
     function e = gl_pos(e, r, c)
 % Sets the row and column of an elemnt in an gridlayout's layout-property.
