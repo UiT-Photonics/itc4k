@@ -1,15 +1,14 @@
-classdef ITC4001 < handle
-% Simple class to make it easier to interact with your ITC4001 in constant
-% current mode. Should - IN THEORY - work with any ITC4000 model but since i
-% haven't tested it i'm releasing it under this name and with no implied support
-% for any device but the 4001... you'll just have to send me some drivers to
-% test or figure out how to instatiate an object with a different device.
+classdef ITC4k < handle
+% Simple class to make it easier to interact with your ITC4000-series controller
+% in constant current mode. Note that this class has ONLY EVERY BEEN TESTED WITH
+% AN ITC4001! So if that's what you have you should be safe, otherwise - proceed
+% with caution =)
 % 
 % Example
-% ITC4001.gui; % launch the gui and work from there
+% ITC4k.gui; % launch the gui and work from there
 %
 % Examplier example
-% o = ITC4001;                  % use the first driver we find
+% o = ITC4k;                  % use the first driver we find
 % o.LD_AM_source = 'internal';  % use the internal modulation source
 % o.LD_AM_shape = 'sin';        % sinus wave modulation
 % o.LD_AM_frequency = 10e3;     % 10 kHz frequncy
@@ -30,7 +29,7 @@ classdef ITC4001 < handle
 % commands/properties. This is kind of by design, it's intended to be an easy
 % abstraction for the most basic use case; starting turning on the TEC, waiting
 % for the temp to stabilize, and turn on the laser. If every possible property
-% of the ITC4001 was a dependent property here it wouldn't be much easier than
+% of a ITC4000 was a dependent property here it wouldn't be much easier than
 % just looking up the SCPI commands and doing it "manually". With that said, the
 % object has three different hidden methods, o.query(property, varargin),
 % o.write(prop, value), and o.query_numeric_bounds(prop). You can check those
@@ -62,7 +61,7 @@ classdef ITC4001 < handle
         id;
 % The state of the keylock [OnOffSwitchState]
         Key_lock (1,1) matlab.lang.OnOffSwitchState;
-% Temperature reading [ITC4001.T_unit]
+% Temperature reading [ITC4k.T_unit]
         T_reading (1,1) {mustBeNumeric};
 % TEC current reading [A]
         TEC_A_reading (1,1) {mustBeNumeric};
@@ -80,80 +79,80 @@ classdef ITC4001 < handle
     properties(Dependent = true)
 % Tthermoelectric cooler (TEC) state [OnOffSwitchState]
         TEC (1,1) matlab.lang.OnOffSwitchState;
-% Unit for temperature readings [ITC4001Enums.TemperatureUnit]
-        T_unit (1,1) ITC4001Enums.TemperatureUnit;
-% Setpoint for TEC [ITC4001.T_unit]. The limits of this value is available in
-% ITC4001.bounds.T_setpoint.
+% Unit for temperature readings [ITC4kEnums.TemperatureUnit]
+        T_unit (1,1) ITC4kEnums.TemperatureUnit;
+% Setpoint for TEC [ITC4k.T_unit]. The limits of this value is available in
+% ITC4k.bounds.T_setpoint.
 %
 % See also
-% ITC4001.bounds
+% ITC4k.bounds
         T_setpoint (1,1) {mustBeNumeric};
 % Laser state [OnOffSwitchState]
         LD (1,1) matlab.lang.OnOffSwitchState;
 % Laser current setpoint [A]. Note that there are two (sets of) limits that 
 % control the current for the laser: (1) the fixed limits for the setpoint.
-% These are capped at both ends by the ITC4001 device itself and is available in
-% the ITC4001.bounds.LD_A_setpoint property. (2) The configurable maximum
-% current limit which is controlled with the ITC4001.LD_A_limit property and is
+% These are capped at both ends by the ITC4k device itself and is available in
+% the ITC4k.bounds.LD_A_setpoint property. (2) The configurable maximum
+% current limit which is controlled with the ITC4k.LD_A_limit property and is
 % usually set to (slightly below) the highest current your laser can handle. The
 % upper and lower bounds that you can set this limit to can be found in
-% ITC4001.bounds.LD_A_limit.
+% ITC4k.bounds.LD_A_limit.
 % The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
 %
 % See also
-% ITC4001.bounds
+% ITC4k.bounds
         LD_A_setpoint (1,1) {mustBePositive};
 % Upper limit for laser current setpoint [A]. Note that there are two (sets of)
 % limits that control the current for the laser: (1) the fixed limits for the
-% setpoint. These are capped at both ends by the ITC4001 device itself and is
-% available in the ITC4001.bounds.LD_A_setpoint property. (2) The configurable
+% setpoint. These are capped at both ends by the ITC4000 device itself and is
+% available in the ITC4k.bounds.LD_A_setpoint property. (2) The configurable
 % maximum current limit which is controlled with this property and is usually
 % set to (slightly below) the highest current your laser can handle. The upper
 % and lower bounds that you can set this limit to can be found in
-% ITC4001.bounds.LD_A_limit.
+% ITC4k.bounds.LD_A_limit.
 % The upper limit for the setpoint value is <= the upper limit for LD_A_limit.
 %
 % See also
-% ITC4001.bounds
+% ITC4k.bounds
         LD_A_limit (1,1) {mustBePositive};
 % Laser amplitude modulation state [OnOffSwitchState]
         LD_AM (1,1) matlab.lang.OnOffSwitchState;
-% Laser amplitude modulation source [ITC4001Enums.ModulationSource]
-        LD_AM_source (1,1) ITC4001Enums.ModulationSource;
-% Internal laser amplitude modulation shape [ITC4001Enums.ModulationShape]
-        LD_AM_shape (1,1) ITC4001Enums.ModulationShape;
+% Laser amplitude modulation source [ITC4kEnums.ModulationSource]
+        LD_AM_source (1,1) ITC4kEnums.ModulationSource;
+% Internal laser amplitude modulation shape [ITC4kEnums.ModulationShape]
+        LD_AM_shape (1,1) ITC4kEnums.ModulationShape;
 % Internal laser amplitude modulation frequency [Hz]. The limits of this value
-% is available in ITC4001.bounds.LD_AM_frequency.
+% is available in ITC4k.bounds.LD_AM_frequency.
 %
 % See also
-% ITC4001.bounds
+% ITC4k.bounds
         LD_AM_frequency (1,1) {mustBePositive};
 % Internal laser amplitude modulation depth [%]. This property sets the
 % modulation peak-to-peak amplitude to its value as a percent of
-% ITC4001.bounds.LD_A_limit.max. As an example, if you set the current setpoint
-% to 0.04 A, the depth to 3%, and ITC4001.bounds.LD_A_limit.max is 1.01 A
+% ITC4k.bounds.LD_A_limit.max. As an example, if you set the current setpoint
+% to 0.04 A, the depth to 3%, and ITC4k.bounds.LD_A_limit.max is 1.01 A
 % (common value for the ITC4001) your current output will sweep from 0.0179 A to
 % 0.0481 A, i.e. 0.04 + [-0.5 0.5] .* 1.01 * 3*1e-2, or more generally:
-% ITC4001.LD_A_setpoint + [-0.5 0.5] .* ITC4001.bounds.LD_A_limit.max * ITC4001.LD_AM_depth*1e-2
+% ITC4k.LD_A_setpoint + [-0.5 0.5] .* ITC4k.bounds.LD_A_limit.max * ITC4k.LD_AM_depth*1e-2
 % If you know which current range you want to sweep over but do not want to
-% calculate the setpoint and depth you can use the ITC4001.lims2AM_depth.
-% The limits of this value is available in ITC4001.bounds.LD_AM_depth.
+% calculate the setpoint and depth you can use the ITC4k.lims2AM_depth.
+% The limits of this value is available in ITC4k.bounds.LD_AM_depth.
 %
 % See also
-% ITC4001.bounds, ITC4001.LD_A_setpoint, ITC4001.lims2AM_depth
+% ITC4k.bounds, ITC4k.LD_A_setpoint, ITC4k.lims2AM_depth
         LD_AM_depth (1,1) {mustBePositive};
     end
     properties(SetAccess = private)
 % Array of structs with min and max-values for the following properties
-% ITC4001.LD_A_setpoint
-% ITC4001.LD_A_limit
-% ITC4001.T_setpoint
-% ITC4001.LD_AM_frequency
-% ITC4001.LD_AM_depth
+% ITC4k.LD_A_setpoint
+% ITC4k.LD_A_limit
+% ITC4k.T_setpoint
+% ITC4k.LD_AM_frequency
+% ITC4k.LD_AM_depth
 %
 % See also
-% ITC4001.LD_A_setpoint, ITC4001.LD_A_limit, ITC4001.T_setpoint,
-% ITC4001.LD_AM_frequency, ITC4001.LD_AM_depth
+% ITC4k.LD_A_setpoint, ITC4k.LD_A_limit, ITC4k.T_setpoint,
+% ITC4k.LD_AM_frequency, ITC4k.LD_AM_depth
         bounds;
     end
     %% VISA props
@@ -177,58 +176,58 @@ classdef ITC4001 < handle
         kLDprot = ["current", "voltage", "external", "internal", ...
                    "interlock", "over_temperature"]; % "keys key"
         mLDprot = 'OUTP1:PROT:'; % meta key
-        pLDprot = {[ITC4001.pLDAspLim, ':TRIP'], ...
-                   [ITC4001.mLDprot, 'VOLT:TRIP'], ...
-                   [ITC4001.mLDprot, 'EXT:TRIP'], ...
-                   [ITC4001.mLDprot, 'INT:TRIP'], ...
-                   [ITC4001.mLDprot, 'INTL:TRIP'], ...
-                   [ITC4001.mLDprot, 'OTEM:TRIP']},
-        pKeyLock = [ITC4001.mLDprot, 'KEYL:TRIP'];
+        pLDprot = {[ITC4k.pLDAspLim, ':TRIP'], ...
+                   [ITC4k.mLDprot, 'VOLT:TRIP'], ...
+                   [ITC4k.mLDprot, 'EXT:TRIP'], ...
+                   [ITC4k.mLDprot, 'INT:TRIP'], ...
+                   [ITC4k.mLDprot, 'INTL:TRIP'], ...
+                   [ITC4k.mLDprot, 'OTEM:TRIP']},
+        pKeyLock = [ITC4k.mLDprot, 'KEYL:TRIP'];
         pLDAM = 'SOUR1:AM';
-        pLDAMsrc = [ITC4001.pLDAM, ':SOUR'];
-        pLDAMshape = [ITC4001.pLDAM, ':INT:SHAP'];
-        pLDAMfreq = [ITC4001.pLDAM, ':INT:FREQ'];
-        pLDAMdepth = [ITC4001.pLDAM, ':INT:DEPT'];
+        pLDAMsrc = [ITC4k.pLDAM, ':SOUR'];
+        pLDAMshape = [ITC4k.pLDAM, ':INT:SHAP'];
+        pLDAMfreq = [ITC4k.pLDAM, ':INT:FREQ'];
+        pLDAMdepth = [ITC4k.pLDAM, ':INT:DEPT'];
         pID = '*IDN';
     end
     %% full public implementation
     methods
-        function o = ITC4001(varargin)
-% o = ITC4001(); creates an instances of the first ITC4001 that's found. Throws
-% an error if none is found.
+        function o = ITC4k(varargin)
+% o = ITC4k(); creates an instances for the first ITC4000-series controller
+% that's found. Throws an error if none is found.
 %
-% devs = ITC4001.list();
-% o = ITC4001(devs(1)); creates an instance of the ITC4001 identified by the
+% devs = ITC4k.list();
+% o = ITC4k(devs(1)); creates an instance of the ITC4000 identified by the
 % struct supplied.
 %
-% o = ITC4001("USB0::62700::4119::XXXXXXXXXXXXXX::0::INSTR"); creates an
-% instance of the ITC4001 with the provided resource name.
+% o = ITC4k("USB0::62700::4119::XXXXXXXXXXXXXX::0::INSTR"); creates an
+% instance of the ITC4000 with the provided resource name.
 %
 % See also
-% ITC4001.list, visadevlist
+% ITC4k.list, visadevlist
             if nargin == 0
-                devs = ITC4001.list();
-                assert(~isempty(devs), 'ITC4001:constructor:no_device', ...
+                devs = ITC4k.list();
+                assert(~isempty(devs), 'ITC4k:constructor:no_device', ...
                        'No device found.');
                 o.dev = visadev(devs(1).ResourceName);
             elseif nargin == 1
                 if isstruct(varargin{1})
                     assert(isfield(varargin{1}, 'ResourceName'), ...
-                           'ITC4001:constructor:struct:ResourceName_missing', ...
+                           'ITC4k:constructor:struct:ResourceName_missing', ...
                            'ResourceName field missing from struct argument.');
                     o.dev = visadev(varargin{1}.ResourceName);
                 elseif isstring(varargin{1}) || ischar(varargin{1})
                     o.dev = visadev(varargin{1});
                 else
-                    error('ITC4001:constructor:arg_class', ...
+                    error('ITC4k:constructor:arg_class', ...
                           'Constructor only accepts a struct or a string as argument.');
                 end
-                if ~strcmp(o.dev.Model, "ITC4001")
-                    warning('ITC4001:constructor:scaryboi', ...
+                if ~strcmp(o.dev.Model, "ITC40", 5)
+                    warning('ITC4k:constructor:scaryboi', ...
                             'This class has only been tested with ITC4001s - hence the name. Proceed with caution or you''ll fry your laser and/or driver..');
                 end
             else
-                error('ITC4001:constructor:nargin', ...
+                error('ITC4k:constructor:nargin', ...
                       'Constructor only accepts 0 or 1 arguments.');
             end
             o.bounds.LD_A_setpoint = o.query_numeric_bounds(o.pLDAsp);
@@ -239,14 +238,14 @@ classdef ITC4001 < handle
         end
 
         function [sp, depth] = lims2AM_depth(o, minA, maxA)
-% [sp, depth] = ITC4001.lims2AM_dept(o, minA, maxA) returns the
-% ITC4001.LD_A_setpoint value, sp, and ITC4001.LD_AM_depth value, depth,
+% [sp, depth] = ITC4k.lims2AM_dept(o, minA, maxA) returns the
+% ITC4k.LD_A_setpoint value, sp, and ITC4k.LD_AM_depth value, depth,
 % required to sweep the laser current from minA to maxA.
 %
 % Example
-% o = ITC4001;
-% o.LD_AM_source = ITC4001Enums.ModulationSource.Internal;
-% o.LD_AM_shape = ITC4001Enums.ModulationShape.Sinusoid;
+% o = ITC4k;
+% o.LD_AM_source = ITC4kEnums.ModulationSource.Internal;
+% o.LD_AM_shape = ITC4kEnums.ModulationShape.Sinusoid;
 % o.LD_AM_frequency = 10e3;
 % [sp, depth] = o.lims2AM_depth(0.2, 0.4);
 % o.LD_A_setpoint = sp;
@@ -255,13 +254,13 @@ classdef ITC4001 < handle
 % % 10 kHZ.
 %
 % See also
-% ITC4001.LD_A_setpoint, ITC4001.LD_AM_depth
-            assert(minA < maxA, 'ITC4001:lims2AM_depth:limits:sort', ...
+% ITC4k.LD_A_setpoint, ITC4k.LD_AM_depth
+            assert(minA < maxA, 'ITC4k:lims2AM_depth:limits:sort', ...
                    'Lower limit (%f) must be less than upper limit (%f)', ...
                    minA, maxA);
             assert(minA >= o.bounds.LD_A_limit.min && ...
                    maxA <= o.bounds.LD_A_limit.max, ...
-                   'ITC4001:lims2AM_depth:limits:oob', ...
+                   'ITC4k:lims2AM_depth:limits:oob', ...
                    'Provided limits (%f, %f) exceeds device limits (%.4f, %.4f)', ...
                    minA, maxA, o.bounds.LD_A_limit.min, ...
                    o.bounds.LD_A_limit.max);
@@ -269,13 +268,13 @@ classdef ITC4001 < handle
             sp = minA + p2p/2;
             assert(o.bounds.LD_A_setpoint.min <= sp && ...
                    sp <= o.bounds.LD_A_setpoint.max, ...
-                   'ITC4001:lims2AM_depth:setpoint:oob', ...
+                   'ITC4k:lims2AM_depth:setpoint:oob', ...
                    'Calculated setpoint (%f) exceeds device limits (%.4f, %.4f)', ...
                    sp, o.bounds.LD_A_setpoint.min, o.bounds.LD_A_setpoint.max);
             depth = 100 * p2p/o.bounds.LD_A_limit.max;
             assert(o.bounds.LD_AM_depth.min <= depth && ...
                    depth <= o.bounds.LD_AM_depth.max, ...
-                   'ITC4001:lims2AM_depth:depth:oob', ...
+                   'ITC4k:lims2AM_depth:depth:oob', ...
                    'Calculated depth (%f) exceeds device limits (%.1f, %.1f)', ...
                    depth, o.bounds.LD_AM_depth.min, o.bounds.LD_AM_depth.max);
         end
@@ -289,7 +288,7 @@ classdef ITC4001 < handle
         end
 
         function unit = get.T_unit(o)
-            unit = ITC4001Enums.TemperatureUnit(o.query(o.pTunit));
+            unit = ITC4kEnums.TemperatureUnit(o.query(o.pTunit));
         end
         function set.T_unit(o, unit)
             o.write(o.pTunit, unit);
@@ -334,13 +333,13 @@ classdef ITC4001 < handle
         function src = get.LD_AM_source(o)
             res = o.query(o.pLDAMsrc);
             if strcmpi(res,'INT,EXT')
-                src = ITC4001Enums.ModulationSource.Both;
+                src = ITC4kEnums.ModulationSource.Both;
             else
-                src = ITC4001Enums.ModulationSource(res);
+                src = ITC4kEnums.ModulationSource(res);
             end
         end
         function set.LD_AM_source(o, src)
-            if src == ITC4001Enums.ModulationSource.Both
+            if src == ITC4kEnums.ModulationSource.Both
                 o.write(o.pLDAMsrc, 'INT,EXT');
             else
                 o.write(o.pLDAMsrc, src);
@@ -348,7 +347,7 @@ classdef ITC4001 < handle
         end
         
         function shape = get.LD_AM_shape(o)
-            shape = ITC4001Enums.ModulationShape(o.query(o.pLDAMshape));
+            shape = ITC4kEnums.ModulationShape(o.query(o.pLDAMshape));
         end
         function set.LD_AM_shape(o, shape)
             o.write(o.pLDAMshape, shape);
@@ -453,11 +452,11 @@ classdef ITC4001 < handle
         uip = gui();
 
         function devs = list()
-% devs = ITC4001.list() returns an array with structs identifying all connected
-% (and turned on) ITC4001s. One of these can then be passed on to the
+% devs = ITC4k.list() returns an array with structs identifying all connected
+% (and turned on) ITC4000s. One of these can then be passed on to the
 % constructor of the class.
             tbl = visadevlist();
-            tbl(~strcmpi("ITC4001", tbl.Model), :) = [];
+            tbl(~strncmpi("ITC40", tbl.Model, 5), :) = [];
             devs = table2struct(tbl);
         end
     end

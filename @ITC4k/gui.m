@@ -1,19 +1,19 @@
 function varargout = gui(varargin)
-% ITC4001.gui(); opens a graphical user interface to connect, control and
-% disconnect from an ITC4001.
+% ITC4k.gui(); opens a graphical user interface to connect, control and
+% disconnect from an ITC4000-series laser controller.
 %
-% uip = ITC4001.gui(); creates a gui to control a ITC4001 and returns the handle 
+% uip = ITC4k.gui(); creates a gui to control an ITC4000 and returns the handle 
 % of the uipanel that contains all the controls that has been created in a new
 % uifigure.
 %
-% uip = ITC4001.gui(parent); as above but creates the uipanel inside the parent
+% uip = ITC4k.gui(parent); as above but creates the uipanel inside the parent
 % provided.
 %
 % Example
 %    % create an application to control your laser and massflow controller
 %    uif = uifigure('Name', 'Full Lab GUI');
 %    gl = uigridlayout(uif, [1 3], 'ColumnWidth', {300, '1x', '2x'});
-%    laser_panel = ITC4001.gui(gl);
+%    laser_panel = ITC4k.gui(gl);
 %    mfc_panel = MyMassFlowControllerGui(gl); % you create this one
 %    result_plt = uiaxes(gl);
 %
@@ -25,15 +25,15 @@ function varargout = gui(varargin)
 
     if nargin == 0
         % autoresizing doesn't seem to work very well with position = [0 0 1 1]
-        g.uif = uifigure('Name', 'ITC4001 Controller', ...
+        g.uif = uifigure('Name', 'ITC4000 Controller', ...
                          'AutoResizeChildren', 'off');
         uip = uipanel(g.uif, 'Units', 'norm', 'Position', [0 0 1 1]);
     elseif nargin == 1
-        uip = uipanel(varargin{1}, 'Title', 'ITC4001 Controller');
+        uip = uipanel(varargin{1}, 'Title', 'ITC4000 Controller');
         g.uif = ancestor(varargin{1}, 'matlab.ui.Figure');
     else
-        error('ITC4001:gui:nargin', ...
-              'ITC4001.gui only accepts 0 or 1 arguments.');
+        error('ITC4k:gui:nargin', ...
+              'ITC4k.gui only accepts 0 or 1 arguments.');
     end
     uip.DeleteFcn = @cb_panel_delete;
 
@@ -73,7 +73,7 @@ function varargout = gui(varargin)
     g.T_reading = gl_pair(gl, row, 'Temperature reading', @uilabel, ...
                           'Text', 'N/A');
     row = row + 1;
-    [~, T_units] = enumeration('ITC4001Enums.TemperatureUnit');
+    [~, T_units] = enumeration('ITC4kEnums.TemperatureUnit');
     g.T_unit = gl_pair(gl, row, 'T unit', @uidropdown, 'Items', T_units, ...
                        'ValueChangedFcn', @cb_set_Tunit);
     row = row + 1;
@@ -99,7 +99,7 @@ function varargout = gui(varargin)
                                         'ValueChangedFcn', @cb_det_LD_AM_src), ...
                              1, 2);
     row = row + 1;
-    [~, mod_shapes] = enumeration('ITC4001Enums.ModulationShape');
+    [~, mod_shapes] = enumeration('ITC4kEnums.ModulationShape');
     g.LD_AM_shape = gl_pair(gl, row, '(IM) Shape', @uidropdown, ...
                             'Items', mod_shapes, ...
                             'ValueChangedFcn', @cb_set_LD_AM_shape);
@@ -163,7 +163,7 @@ function varargout = gui(varargin)
     % the same value in d.Value as d.PreviousValue by e.g. pressing a button
     % quickly, hence the checks everywhere.
     function cb_panel_delete(~, ~)
-        if isa(s.dev, 'ITC4001'); s.dev.disconnect(); end
+        if isa(s.dev, 'ITC4k'); s.dev.disconnect(); end
         if isa(s.timer, 'timer') && strcmp(s.timer.Running, 'on')
             s.timer.stop();
         end
@@ -234,21 +234,21 @@ function varargout = gui(varargin)
         % buttons together can only be <either> or <both>, never <neither>
         src = s.dev.LD_AM_source;
         if strcmp(d.Tag, 'internal')
-            unchecked_res = ITC4001Enums.ModulationSource.External;
+            unchecked_res = ITC4kEnums.ModulationSource.External;
         elseif strcmp(d.Tag, 'external')
-            unchecked_res = ITC4001Enums.ModulationSource.Internal;
+            unchecked_res = ITC4kEnums.ModulationSource.Internal;
         else
-            warning('ITC4001:gui:unknown_LD_AM_source', ...
+            warning('ITC4k:gui:unknown_LD_AM_source', ...
                     'Unknown LD_AM_source "%s"', c.Tag);
             c.Value = d.PreviousValue;
         end
 
         if d.Value % checkbox has been checked
             if src == unchecked_res
-                s.dev.LD_AM_source = ITC4001Enums.ModulationSource.Both;
+                s.dev.LD_AM_source = ITC4kEnums.ModulationSource.Both;
             end
         else % checkbox has been unchecked..
-            if src == ITC4001Enums.ModulationSource.Both
+            if src == ITC4kEnums.ModulationSource.Both
                 s.dev.LD_AM_source = unchecked_res;
             else
                 % ..but if src ~= <both> (i.e. the other checkbox is not
@@ -283,7 +283,7 @@ function varargout = gui(varargin)
     function v = connect_dev()
         v = false;
         try
-            s.dev = ITC4001(g.dd_devs.Value);
+            s.dev = ITC4k(g.dd_devs.Value);
         catch e
             if strcmp(e.identifier, ...
                       'instrument:interface:visa:multipleIdenticalResources')
@@ -346,7 +346,7 @@ function varargout = gui(varargin)
     function v = disconnect_dev()
         v = true;
         enable_fields('off');
-        if isa(s.dev, 'ITC4001'); s.dev.disconnect(); end
+        if isa(s.dev, 'ITC4k'); s.dev.disconnect(); end
         if isa(s.timer, 'timer') && strcmp(s.timer.Running, 'on')
             s.timer.stop();
         end
@@ -426,9 +426,9 @@ function varargout = gui(varargin)
 
         % Laser modulation stuff
         am_src = s.dev.LD_AM_source == ...
-                 [ITC4001Enums.ModulationSource.Internal, ...
-                  ITC4001Enums.ModulationSource.External, ...
-                  ITC4001Enums.ModulationSource.Both];
+                 [ITC4kEnums.ModulationSource.Internal, ...
+                  ITC4kEnums.ModulationSource.External, ...
+                  ITC4kEnums.ModulationSource.Both];
         g.LD_AM_src_int.Value = any(am_src([1,3]));
         g.LD_AM_src_ext.Value = any(am_src([2,3]));
 
@@ -450,7 +450,7 @@ function varargout = gui(varargin)
 
     function update_dd_devs()
         g.uif.Pointer = 'watch';
-        devs = ITC4001.list();
+        devs = ITC4k.list();
         strs = [devs.ResourceName];
         has_alias = ~([devs.Alias] == "");
         if any(has_alias); strs(has_alias) = [devs(has_alias).Alias]; end
