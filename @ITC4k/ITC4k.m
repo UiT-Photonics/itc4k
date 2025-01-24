@@ -41,17 +41,16 @@ classdef ITC4k < handle
 % - LD_W_*-stuff, like LD_A_* but for power
 % - make it a better visadev citizen, see
 %   https://se.mathworks.com/help/releases/R2024b/instrument/transition-your-code-to-visadev-interface.html
+% - Test it with some other ITC4000-series devices to ensure that it works
+%   properly
 %
 % Possible future addons
-% - Test it with some other ITC4000-series devices to ensure that it works
-%   properly, then remove the 
 % - Make it work for LDC4000-series, shold really just be to add another SCPI
 %   props-section (and adjust the usage accordingly). or maybe an abstract class
-%   that then gets subclassed with or something..
+%   that then gets subclassed or something..
 % - Maybe also TED4000, that one's missing some stuff tho.
-%
 
-    %% read-only properties of the physical device(-ish)
+%% read-only properties of the physical device(-ish)
     properties(Dependent = true, SetAccess = private)
 % The resource name, aka "visa address"
         addr;
@@ -75,9 +74,9 @@ classdef ITC4k < handle
 % [logical]
         LD_protection_tripped (1,1) struct;
     end
-    %% read-write properties of the physical device
+%% read-write properties of the physical device
     properties(Dependent = true)
-% Tthermoelectric cooler (TEC) state [OnOffSwitchState]
+% Thermoelectric cooler (TEC) state [OnOffSwitchState]
         TEC (1,1) matlab.lang.OnOffSwitchState;
 % Unit for temperature readings [ITC4kEnums.TemperatureUnit]
         T_unit (1,1) ITC4kEnums.TemperatureUnit;
@@ -155,12 +154,12 @@ classdef ITC4k < handle
 % ITC4k.LD_AM_frequency, ITC4k.LD_AM_depth
         bounds;
     end
-    %% VISA props
+%% VISA props
     % C/Should be extended with all the right protocol settings
     properties(GetAccess = protected, SetAccess = immutable)
         dev; % the VISA device
     end
-    %% SCPI props/commands/path
+%% SCPI props/commands/path
     properties(Constant = true, Access = protected)
         pTEC = 'OUTP2';
         pTunit = 'UNIT:TEMP';
@@ -190,7 +189,7 @@ classdef ITC4k < handle
         pLDAMdepth = [ITC4k.pLDAM, ':INT:DEPT'];
         pID = '*IDN';
     end
-    %% full public implementation
+%% full public implementation
     methods
         function o = ITC4k(varargin)
 % o = ITC4k(); creates an instances for the first ITC4000-series controller
@@ -222,7 +221,7 @@ classdef ITC4k < handle
                     error('ITC4k:constructor:arg_class', ...
                           'Constructor only accepts a struct or a string as argument.');
                 end
-                if ~strcmp(o.dev.Model, "ITC40", 5)
+                if ~strncmp(o.dev.Model, "ITC40", 5)
                     warning('ITC4k:constructor:scaryboi', ...
                             'This class has only been tested with ITC4001s - hence the name. Proceed with caution or you''ll fry your laser and/or driver..');
                 end
@@ -424,6 +423,7 @@ classdef ITC4k < handle
         end
     end
 
+%% Internal stuff
     methods(Hidden = true)
         function ret = query(o, prop, varargin)
             ret = strip(writeread(o.dev, [prop, '?', varargin{:}]), 'right');
@@ -447,10 +447,8 @@ classdef ITC4k < handle
         end
     end
 
+%% Statics
     methods(Static = true)
-        % this one's in a separate file
-        uip = gui();
-
         function devs = list()
 % devs = ITC4k.list() returns an array with structs identifying all connected
 % (and turned on) ITC4000s. One of these can then be passed on to the
@@ -459,5 +457,8 @@ classdef ITC4k < handle
             tbl(~strncmpi("ITC40", tbl.Model, 5), :) = [];
             devs = table2struct(tbl);
         end
+
+        % this one's in a separate file
+        varargout = gui(varargin);
     end
 end

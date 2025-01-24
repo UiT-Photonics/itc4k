@@ -16,8 +16,6 @@ function varargout = gui(varargin)
 %    laser_panel = ITC4k.gui(gl);
 %    mfc_panel = MyMassFlowControllerGui(gl); % you create this one
 %    result_plt = uiaxes(gl);
-%
-% TODO: make an easy to use "laser sweeper"
 
     % the state
     s = struct('dev', [], 'timer', []);
@@ -158,7 +156,7 @@ function varargout = gui(varargin)
     if nargin == 0; resz_and_center(g.uif, 290, 666, 0); end
     if nargout > 0; varargout{1} = uip; end
 
-    %% "pure" callbacks
+%% "pure" callbacks
     % when i tried this out on some matlab version of windows it was easy to get
     % the same value in d.Value as d.PreviousValue by e.g. pressing a button
     % quickly, hence the checks everywhere.
@@ -278,7 +276,7 @@ function varargout = gui(varargin)
         s.dev.LD_AM = d.Value;
     end
 
-    %% supporting functions
+%% supporting functions
     % these are the ones doing the heavy lifting for some of the callbacks
     function v = connect_dev()
         v = false;
@@ -335,7 +333,7 @@ function varargout = gui(varargin)
         v = true;
     end
     function update_vals_bridge() %#ok<DEFNU>
-% this one's aroudn to debug failures when running the timer
+% this one's around to debug failures when running the timer
         try
             update_vals();
         catch me
@@ -459,7 +457,7 @@ function varargout = gui(varargin)
         g.uif.Pointer = 'arrow';
     end
 
-    %% depth calculator ("wizard") section
+%% depth calculator ("wizard") section
     function LD_AM_wizard()
         g.uifm = uifigure('Name', 'Modulation depth calculator', ...
                           'WindowStyle','modal');
@@ -515,7 +513,7 @@ function varargout = gui(varargin)
         delete(g.uifm);
     end
 
-    %% gui building stuff
+%% gui building stuff
     function p = resz_and_center(win, w, h, parent_win)
         pu = get(parent_win, 'Units');
         wu = get(win, 'Units');
