@@ -17,7 +17,7 @@ function varargout = gui(varargin)
 %    mfc_panel = MyMassFlowControllerGui(gl); % you create this one
 %    result_plt = uiaxes(gl);
 
-    % the state
+    % state and gui
     s = struct('dev', [], 'timer', []);
     g = struct();
 
