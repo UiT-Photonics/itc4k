@@ -334,10 +334,8 @@ function varargout = gui(varargin)
     end
     function update_vals_bridge() %#ok<DEFNU>
 % this one's around to debug failures when running the timer
-        try
-            update_vals();
-        catch me
-            disp(getReport(me, 'extended', 'hyperlinks', 'on'));
+        try update_vals();
+        catch me; disp(getReport(me, 'extended', 'hyperlinks', 'on'));
         end
     end
 
