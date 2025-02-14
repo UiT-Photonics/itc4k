@@ -16,6 +16,11 @@ function varargout = gui(varargin)
 %    laser_panel = ITC4k.gui(gl);
 %    mfc_panel = MyMassFlowControllerGui(gl); % you create this one
 %    result_plt = uiaxes(gl);
+%
+% TODO
+% - Switch to setting current span rather than depth as a default for internal
+%   modulation (leaving the ?-button and thru that one manually setting the
+%   depth)
 
     % state and gui
     s = struct('dev', [], 'timer', []);
@@ -479,7 +484,7 @@ function varargout = gui(varargin)
                           s.dev.bounds.LD_A_limit.max);
         set_numfield_lims(g.wiz.max, s.dev.bounds.LD_A_limit.min, ...
                           s.dev.bounds.LD_A_limit.max);
-        g.wiz.lbl = gl_pair(gl_wiz, 3, '(IM) Depth / Setpoint', @uilabel, ...
+        g.wiz.lbl = gl_pair(gl_wiz, 3, '(IM) Setpoint / Depth', @uilabel, ...
                             'Text', sprintf('%.4f A / %.1f %%', ...
                                             g.wiz.sp, g.wiz.d));
         g.wiz.btn = gl_pos(uibutton(gl_wiz, 'Text', 'Store values & close!', ...
