@@ -21,6 +21,7 @@ function varargout = gui(varargin)
 % - Switch to setting current span rather than depth as a default for internal
 %   modulation (leaving the ?-button and thru that one manually setting the
 %   depth)
+% - Switch to more useful tooltips
 
     % state and gui
     s = struct('dev', [], 'timer', []);
